@@ -1,17 +1,18 @@
 """
 This script generates and saves the states closest to the solved state.  
 
-It stores the results as an hd5 file as an array of the form 
-It creates/saves a dictionary indexed by state keys which stores precursers to 
-the policy array p and the value v.
+It stores the results as an hd5 file as an array.  See the code at the end
+for how to load the data.
 
-The key is the bytes representation of the bit array used by the NN.
+It stores three values (stored in parallel arrays).
 
-The policy precurser is a boolean array which marks all actions
-which lead to the shortest path to the solved cube
+- A bit array representing the state.
 
-The value precurser is the distance to the solved_cube
+- A boolean array which marks all actions which lead to the shortest path to the solved cube
+
+- The distance to the solved_cube
 """
+
 import collections
 import numpy as np
 
@@ -26,6 +27,7 @@ MAX_DISTANCE = 6
 eye12 = np.eye(12, dtype=bool)
 
 state_dict = {} # value =  (best_actions, distance)
+
 
 print("Generating data...")
 # start with solved cube
@@ -78,6 +80,7 @@ for distance in range(1, MAX_DISTANCE+1):
     # rebuild cube
     cubes._cube_array = np.array(new_cube_array)
 
+
 print("Storing data...")
 
 # convert to arrays for easy storing
@@ -104,10 +107,7 @@ h5f.create_dataset('best_actions', data=best_actions)
 h5f.create_dataset('distances', data=distances)
 h5f.close()
 
-#import pickle
-#with open('../save/close_state_data.pickle', 'wb') as f:
-#    pickle.dump(list(state_dict.items()), f)
-        
+     
 print("Load data...")
 
 # Load
@@ -119,6 +119,7 @@ h5f.close()
 
 # Rebuild dictionary
 state_dict = {b.tobytes():(b, a, int(d)) for b, a, d in zip(bits, best_actions, distances)}
+
 
 print("Testing data...")
 # Test data types
