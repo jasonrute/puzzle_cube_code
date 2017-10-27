@@ -2,7 +2,7 @@
 An implementation of an array Rubic's cubes.
 
 Actions are stored in this order (corresponding to these numbers)
-    0:L, 1:R, 2:U, 3:D, 4:F, 5:B, 6:L', 1:R', 2:U', 3:D', 4:F', 5:B'
+    0:L, 1:L', 2:R, 3:R', 4:U, 5:U', 6:D, 7:D', 8:F, 9:F', 10:B, 11:B'
 
 Internally the cube is stored as an integer array of dimension ? x 54
     One row for each cube, stored in a way easy to import into PyCuber (for printing)
@@ -17,7 +17,7 @@ When it is outputed to a bit array (for the NN) it is stored as ? x 54 x 6
 import numpy as np
 import pycuber as pc
 
-basic_moves = list("LRUDFB") + [m+"'" for m in "LRUDFB"]
+basic_moves = ["L", "L'", "R", "R'", "U", "U'", "D", "D'", "F", "F'", "B", "B'"]
 
 # store cubes via 
 #    (-1, 6 faces, 9 squares) arrays
@@ -82,7 +82,12 @@ forward_action_array =\
          3,  6, 36, 37, 35, 39, 40, 34, 42, 43, 33, 51, 48, 45, 52, 49, 46,
         53, 50, 47]])
 
-action_array = forward_action_array
+# Unfortionately the forward_action_array is in the wrong order.  
+# It is in the order L' R' U' D' F' B' L R U D F B
+# But we want it in the order L L' R' U' D' F' B' L R U D F B
+# Here we fix it.
+
+action_array = forward_action_array[[6, 0, 7, 1, 8, 2, 9, 3, 10, 4, 11, 5]]
 
 class BatchCube():
     """
