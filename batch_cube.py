@@ -1,3 +1,19 @@
+"""
+An implementation of an array Rubic's cubes.
+
+Actions are stored in this order (corresponding to these numbers)
+    0:L, 1:R, 2:U, 3:D, 4:F, 5:B, 6:L', 1:R', 2:U', 3:D', 4:F', 5:B'
+
+Internally the cube is stored as an integer array of dimension ? x 54
+    One row for each cube, stored in a way easy to import into PyCuber (for printing)
+    The numbers 0-5 correspond to the colors RYGWOB
+    The nth block of 9 numbers corresponds to the nth face (in the order RYGWOB)
+    E.g. the solved cube is stored as 
+        000000000011111111111222222222233333333334444444444555555555
+
+When it is outputed to a bit array (for the NN) it is stored as ? x 54 x 6
+"""
+
 import numpy as np
 import pycuber as pc
 
