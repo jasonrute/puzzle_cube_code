@@ -182,6 +182,7 @@ if __name__ == '__main__':
     bc = BatchCube()
     bc.from_pycuber([pc.Cube()])
     print(len(bc))
+    assert len(bc) == 1
     for c in bc.to_pycuber():
         print(c)
         
@@ -196,6 +197,7 @@ if __name__ == '__main__':
         
         for c in bc.to_pycuber():
             print(i, m, c == mycube)
+            assert c == mycube, "Action {} (in BatchCube) does not match action {} in PyCuber.  The first gives:\n{}\nThe second gives:\n{}".format(i, m, c, mycube)
     
     # multiple actions
     bc = BatchCube(12)
@@ -207,6 +209,7 @@ if __name__ == '__main__':
     
     for c1, c2 in zip(bc.to_pycuber(), cube_list):
         print(c1 == c2)
+        assert c1 == c2
     
     # test remove_done
     bc = BatchCube(12)
@@ -215,20 +218,27 @@ if __name__ == '__main__':
     bc.step(np.array([0]*12))
     
     print(bc.done())
+    assert bc.done().sum() == 1
+    assert bc.done()[1] == 1
     bc.remove_done()
     print(len(bc))
+    assert len(bc) == 11
 
     # test independent actions
     bc.step_independent(np.arange(12))
     bc.step_independent(np.arange(12))
     print(len(bc))
+    assert len(bc) == 11 * 12 * 12
     print(bc.done().sum())
+    assert bc.done().sum() == 14
 
     #test randomize
     bc = BatchCube(2)
     bc.randomize(1)
+    print("Randomized once:")
     for c in bc.to_pycuber():
         print(c)
+    print("Randomized many times:")
     bc.randomize()
     for c in bc.to_pycuber():
         print(c)
