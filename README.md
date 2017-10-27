@@ -32,6 +32,7 @@ little or no domain knowledge.
 ## To Do
 - [x] Dump previous code into Git repository
 - [x] Fix Cube action order to make standardized
+- [x] Generate and save data for early states
 - [ ] Develop outline of a better training process
   - [ ] Make training file
   - [ ] Split off components of the training process into their own files as it makes sense
