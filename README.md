@@ -30,8 +30,8 @@ little or no domain knowledge.
   
 
 ## To Do
-- [ ] Dump previous code into Git repository
-- [ ] Fix Cube action order to make standardized
+- [x] Dump previous code into Git repository
+- [x] Fix Cube action order to make standardized
 - [ ] Develop outline of a better training process
   - [ ] Make training file
   - [ ] Split off components of the training process into their own files as it makes sense
