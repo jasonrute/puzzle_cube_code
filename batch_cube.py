@@ -19,12 +19,13 @@ import pycuber as pc
 
 basic_moves = ["L", "L'", "R", "R'", "U", "U'", "D", "D'", "F", "F'", "B", "B'"]
 
+eye6 = np.eye(6, dtype=bool)
 # store cubes via 
 #    (-1, 6 faces, 9 squares) arrays
 #    (-1, 6 colors, 6 faces, 9 squares) bit array
 
 solved_cube_list = np.array([0]*9 + [1]*9 + [2]*9 + [3]*9 + [4]*9 + [5]*9)
-solved_cube_bit_array = np.eye(6)[np.newaxis, solved_cube_list]
+solved_cube_bit_array = eye6[np.newaxis, solved_cube_list]
 
 pc_indices = [58, 61, 64, 95, 98, 101, 132, 135, 138, 10, 13, 16, 29, 32, 35, 48, 51, 54, 67, 70, 73, 104, 107, 110, 141, 144, 147, 178, 181, 184, 197, 200, 203, 216, 219, 222, 76, 79, 82, 113, 116, 119, 150, 153, 156, 85, 88, 91, 122, 125, 128, 159, 162, 165]
 
@@ -95,30 +96,35 @@ class BatchCube():
     It has methods for converting to the PyCuber object class.
     """
     
-    def __init__(self, length = 1):
+    def __init__(self, length = 1, cube_array=None, sample_index=None):
         """
         Creates length-many solved cubes
         """
-        self._cube_array = np.repeat(solved_cube_list[np.newaxis], repeats=length, axis=0)
+        if cube_array is None:
+            self._cube_array = np.repeat(solved_cube_list[np.newaxis], repeats=length, axis=0)
+        else:
+            self._cube_array = cube_array
+
+        if sample_index is None:
+            self._sample_index = np.indices(self._cube_array.shape)[0]
+        else:
+            self._sample_index = sample_index
     
     def copy(self):
-        new_cubes = BatchCube(len(self))
-        new_cubes._cube_array = self._cube_array.copy()
-        return new_cubes
+        return BatchCube(cube_array=self._cube_array.copy(), sample_index=self._sample_index)
         
     def __len__(self):
         return self._cube_array.shape[0]
      
     def bit_array(self):
-        return np.eye(6, dtype=bool)[self._cube_array]
+        return eye6[self._cube_array]
 
     def step(self, actions):
         """
         Assuming actions is a list of length = len(self)
         """
         action_indices = action_array[actions]
-        sample_index, _ = np.indices(self._cube_array.shape)
-        self._cube_array = self._cube_array[sample_index, action_indices]
+        self._cube_array = self._cube_array[self._sample_index, action_indices]
 
     def step_independent(self, actions):
         """
@@ -128,6 +134,7 @@ class BatchCube():
         cubes_len = len(self._cube_array)
         
         self._cube_array = np.repeat(self._cube_array, repeats=action_len, axis=0)
+        self._sample_index = np.indices(self._cube_array.shape)[0]
         actions = np.tile(actions, cubes_len)
         
         self.step(actions)
@@ -161,12 +168,14 @@ class BatchCube():
             cube_array = np.array([color_dict[s[i]] for i in pc_indices])
             pre_array.append(cube_array)
         self._cube_array = np.array(pre_array)
+        self._sample_index = np.indices(self._cube_array.shape)[0]
     
     def done(self):
         return (self._cube_array == solved_cube_list).all(axis=1)
     
     def remove_done(self):
         self._cube_array = self._cube_array[~self.done()]
+        self._sample_index = np.indices(self._cube_array.shape)[0]
     
     def __str__(self):
         return "".join(str(c) for c in self.to_pycuber())
