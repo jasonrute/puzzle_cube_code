@@ -66,6 +66,7 @@ class MCTSNode():
         if not self.terminal:
             self.is_leaf_node = True
             self.prior_probabilities, self.node_value = state.calculate_priors_and_value()
+            self.total_visit_counts = 0
             self.visit_counts = np.zeros(action_count, dtype=int)
             self.total_action_values = np.zeros(action_count)
             self.mean_action_values = np.zeros(action_count)
@@ -74,7 +75,7 @@ class MCTSNode():
             self.transposition_table = transposition_table
 
     def upper_confidence_bounds(self):
-        return (c_puct * np.sqrt(self.visit_counts.sum())) * self.prior_probabilities / (1 + self.visit_counts)
+        return (c_puct * np.sqrt(self.total_visit_counts)) * self.prior_probabilities / (1 + self.visit_counts)
 
     def child(self, action):
         # return node if already indexed
@@ -119,6 +120,7 @@ class MCTSNode():
         leaf_value = self.child(action).select_leaf_and_update(max_depth - 1)
         #print("Returning back to:", max_depth)
         # recursively update edge values
+        self.total_visit_counts += 1
         self.visit_counts[action] += 1
         self.total_action_values[action] += leaf_value
         self.mean_action_values[action] = self.total_action_values[action] / self.visit_counts[action]
