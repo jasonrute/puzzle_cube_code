@@ -251,7 +251,13 @@ if __name__ == '__main__':
     bc.randomize()
     for c in bc.to_pycuber():
         print(c)
-    
 
-
+    #test copy
+    bc = BatchCube(1)
+    bc2 = bc.copy()
+    bc.step_independent(np.arange(12))
+    assert len(bc2) == 1
+    bc2.step([0])
+    bc2.step([1])
+    assert bc2.done()[0] == True
     
