@@ -1,24 +1,9 @@
-from keras.models import Sequential
-from keras.layers import Dense
-from keras.optimizers import Adam
-from keras.losses import categorical_crossentropy
-
 import numpy as np
 from batch_cube import BatchCube
 
 action_count = 12
 c_puct = 10
 constant_priors = np.array([1/3] * action_count)
-
-model = Sequential()
-model.add(Dense(128, input_dim=6*54, activation='relu'))
-model.add(Dense(128, activation='relu'))
-model.add(Dense(12, activation='softmax'))
-model.compile(loss=categorical_crossentropy,
-              optimizer=Adam(lr=0.001))
-
-def prob_box(p):
-    return " ▁▂▃▄▅▆▇▉"[int(round(p*8))]
 
 class State():
     """ This is application specfic """
@@ -40,7 +25,7 @@ class State():
     def input_array(self):
         return self.internal_state.bit_array().reshape((1, 6*54))
 
-    def calculate_priors_and_value(self):
+    def calculate_priors_and_value(self, model):
         """ 
         For now, this does nothing special.  It evenly weights all actions,
         and it gives a nuetral value (0 out of [-1,1]) to each non-terminal node.
@@ -59,13 +44,13 @@ class State():
         return str(self.internal_state)
 
 class MCTSNode():
-    def __init__(self, state, transposition_table):
+    def __init__(self, state, transposition_table, model):
         self.state = state
         self.terminal = state.done()
 
         if not self.terminal:
             self.is_leaf_node = True
-            self.prior_probabilities, self.node_value = state.calculate_priors_and_value()
+            self.prior_probabilities, self.node_value = state.calculate_priors_and_value(model)
             self.total_visit_counts = 0
             self.visit_counts = np.zeros(action_count, dtype=int)
             self.total_action_values = np.zeros(action_count)
@@ -73,6 +58,7 @@ class MCTSNode():
             self.children = [None] * action_count
 
             self.transposition_table = transposition_table
+            self.model = model
 
     def upper_confidence_bounds(self):
         return (c_puct * np.sqrt(self.total_visit_counts)) * self.prior_probabilities / (1 + self.visit_counts)
@@ -90,7 +76,7 @@ class MCTSNode():
             return self.transposition_table[key]
 
         # create new node
-        new_node = MCTSNode(next_state, self.transposition_table)
+        new_node = MCTSNode(next_state, self.transposition_table, self.model)
         self.children[action] = new_node
         self.transposition_table[key] = new_node
         return new_node
@@ -169,12 +155,13 @@ class MCTSNode():
 
 class MCTSAgent():
 
-    def __init__(self, initial_state, max_depth, transposition_table={}):
+    def __init__(self, model, initial_state, max_depth, transposition_table={}):
+        self.model = model
         self.max_depth = max_depth
         self.total_steps = 0
         self.transposition_table = transposition_table
 
-        self.initial_node = MCTSNode(initial_state, self.transposition_table)
+        self.initial_node = MCTSNode(initial_state, self.transposition_table, self.model)
 
     def search(self, steps):
         for s in range(steps):
@@ -200,8 +187,24 @@ class MCTSAgent():
         best_action = np.argmax(self.action_visit_counts())
         self.initial_node = self.initial_node.child(best_action)  
 
+## To later remove ##
+
+def prob_box(p):
+        return " ▁▂▃▄▅▆▇▉"[int(round(p*8))]
         
 def main():
+    from keras.models import Sequential
+    from keras.layers import Dense
+    from keras.optimizers import Adam
+    from keras.losses import categorical_crossentropy
+
+    model = Sequential()
+    model.add(Dense(128, input_dim=6*54, activation='relu'))
+    model.add(Dense(128, activation='relu'))
+    model.add(Dense(12, activation='softmax'))
+    model.compile(loss=categorical_crossentropy,
+                  optimizer=Adam(lr=0.001))
+
     #model.load_weights("./save/mcts_nn_cube.h5")
     max_random = 5
     while True:
@@ -212,7 +215,7 @@ def main():
             print("random dist: {}/{}".format(r, max_random), "step:", i)
             state = State()
             state.reset_and_randomize(r)
-            mcts = MCTSAgent(state, max_depth=100)
+            mcts = MCTSAgent(model, state, max_depth=100)
             print(mcts.initial_node.state)
             if mcts.is_terminal():
                 print("Done!")
@@ -227,6 +230,7 @@ def main():
                 print("Q:    ", "[" + "".join(prob_box(max(0,p)) for p in q) + "]")
 
         model.save_weights("./save/mcts_nn_cube.h5")
+
 if __name__ == '__main__':
     main()
 
