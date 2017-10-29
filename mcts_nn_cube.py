@@ -169,10 +169,10 @@ class MCTSNode():
 
 class MCTSAgent():
 
-    def __init__(self, initial_state, max_depth):
+    def __init__(self, initial_state, max_depth, transposition_table={}):
         self.max_depth = max_depth
         self.total_steps = 0
-        self.transposition_table = {}
+        self.transposition_table = transposition_table
 
         self.initial_node = MCTSNode(initial_state, self.transposition_table)
 
