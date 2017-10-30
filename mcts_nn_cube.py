@@ -2,8 +2,11 @@ import numpy as np
 from batch_cube import BatchCube
 
 action_count = 12
-c_puct = 10
+c_puct = 10.0
+gamma = .95
 constant_priors = np.array([1/3] * action_count)
+constant_value = .01
+max_depth_value = 0.0
 
 class State():
     """ This is application specfic """
@@ -31,7 +34,7 @@ class State():
         and it gives a nuetral value (0 out of [-1,1]) to each non-terminal node.
         """
         prior = model.predict(self.input_array()).reshape((12,))
-        value = 0
+        value = .01
         return prior, value
 
     def key(self):
@@ -86,7 +89,7 @@ class MCTSNode():
         # terminal nodes are good
         if self.terminal:
             #print("... terminal node, returning 1")
-            return 1
+            return 1.
 
         # we stop at leaf nodes
         if self.is_leaf_node:
@@ -98,24 +101,28 @@ class MCTSNode():
         # (this should punish loops as well)
         if not max_depth:
             #print("... max_depth == 0, returning -1")
-            return -1
+            return max_depth_value
 
         # otherwise, find new action and follow path
         action = np.argmax(self.mean_action_values + self.upper_confidence_bounds())
-        #print("Performing Action:", action)
-        leaf_value = self.child(action).select_leaf_and_update(max_depth - 1)
-        #print("Returning back to:", max_depth)
-        # recursively update edge values
+        
+        # update visit counts before recursing in case we come across the same node again
         self.total_visit_counts += 1
         self.visit_counts[action] += 1
-        self.total_action_values[action] += leaf_value
+
+        #print("Performing Action:", action)
+        action_value = gamma * self.child(action).select_leaf_and_update(max_depth - 1)
+        #print("Returning back to:", max_depth)
+        
+        # recursively update edge values
+        self.total_action_values[action] += action_value
         self.mean_action_values[action] = self.total_action_values[action] / self.visit_counts[action]
 
         # recusively backup leaf value
-        #print("DB: update node", "action:", action, "leaf value:", leaf_value)
+        #print("DB: update node", "action:", action, "action value:", action_value)
         #print(self.status() + "\n")
 
-        return leaf_value
+        return action_value
 
     def action_visit_counts(self):
         """ Returns action visit counts. """
