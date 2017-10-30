@@ -19,6 +19,16 @@ little or no domain knowledge.
 - A todo list is stored below
 
 ## Results (most recent first):
+- v0.0.2 (2017-10-30)
+	- Use basic MCTS as v0 but with the following major changes
+		- Count visits before visiting.  Therefore, if I get back to the same node, I won't necessarily loop.
+		- *Action values:* Action values are now an estimate of gamma^distance.
+		  - Here gamma is .95 and distance is the distance to the solved state.
+		  - The leaf values are .01 (about 0.95^90) which help to break the issue where Q is constant 0.
+		    The idea is that if we can't reach the solution, then less explored values have a higher Q.
+		  - The "max depth" values are 0 (i.e. infinitely far away).
+	- It stops working about distcance 7, 8, 9, but unlike v0, it doesn't seem to break at low values.
+	- It also doesn't memorize the flawed policy quite as well because of the .01 ambiate value.  (A better approach would be to add some noise to the root node and/or to use the policy from a random symmetric case.)
 - v0 (2017-10-27)
 	- Use MCTS (with policy NN) to generate new policy.  Then train NN with that.
 	- Increment max randomization distances (distance from solved cube) at a constant rate
@@ -33,6 +43,10 @@ little or no domain knowledge.
 - [x] Dump previous code into Git repository
 - [x] Fix Cube action order to make standardized
 - [x] Generate and save data for early states
+- [ ] Improve MCTS algorithm
+  - [ ] Add dirichlet noise like in AlphaGo paper (maybe alpha = .75 since there are so few actions)
+  - [ ] Record when we get to solution and then set the max_depth to be that value
+    - [ ] Not sure what value to use for leaf nodes (maybe 0 is fine)  
 - [ ] Develop outline of a better training process
   - [ ] Make training file
   - [ ] Split off components of the training process into their own files as it makes sense
