@@ -169,6 +169,9 @@ class MCTSAgent():
         self.transposition_table = transposition_table
 
         self.initial_node = MCTSNode(initial_state, self.transposition_table, self.model)
+        self.initial_node.prior_probabilities = \
+            .75 * self.initial_node.state.calculate_priors_and_value(model)[0] +\
+            .25 * np.random.dirichlet([.5]*action_count, 1)[0]
 
     def search(self, steps):
         for s in range(steps):
@@ -192,7 +195,10 @@ class MCTSAgent():
         # TOFIX: I should (maybe?) find a way to delete the nodes not below this one, 
         # including from the tranposition table
         best_action = np.argmax(self.action_visit_counts())
-        self.initial_node = self.initial_node.child(best_action)  
+        self.initial_node = self.initial_node.child(best_action) 
+        self.initial_node.prior_probabilities = \
+            .75 * self.initial_node.state.calculate_priors_and_value(model)[0] +\
+            .25 * np.random.dirichlet([.5]*action_count, 1)[0]
 
 ## To later remove ##
 
@@ -223,16 +229,18 @@ def main():
             state = State()
             state.reset_and_randomize(r)
             mcts = MCTSAgent(model, state, max_depth=100)
-            print(mcts.initial_node.state)
+            #print(mcts.initial_node.state)
             if mcts.is_terminal():
                 print("Done!")
             else:
                 mcts.search(steps = 10000)
-                prior = mcts.initial_node.prior_probabilities
+                prior, _ = mcts.initial_node.state.calculate_priors_and_value(model)
+                prior2 = mcts.initial_node.prior_probabilities
                 probs = mcts.action_probabilities(inv_temp = 1)
                 q = mcts.initial_node.mean_action_values
                 model.fit(state.input_array(), probs.reshape((1,12)), epochs=1, verbose=0)
                 print("Prior:", "[" + "".join(prob_box(p) for p in prior) + "]")
+                print("PrDir:", "[" + "".join(prob_box(p) for p in prior2) + "]")
                 print("Prob: ", "[" + "".join(prob_box(p) for p in probs) + "]")
                 print("Q:    ", "[" + "".join(prob_box(max(0,p)) for p in q) + "]")
 
