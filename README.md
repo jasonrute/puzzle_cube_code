@@ -19,6 +19,13 @@ little or no domain knowledge.
 - A todo list is stored below
 
 ## Results (most recent first):
+- v0.0.3 (2017-10-30)
+	- Following major changes
+		- Add in some Dirichlet noise (alpha = .5) to the root node of the MCTS
+			- Provides more exploration
+			- Prevents the NN from memorizing the prior when it can't find a solution.
+		- Seems to work well, but still doesn't do well above a distance of 7.
+		- Also discovered a massive memory leak that needs to be fixed.
 - v0.0.2 (2017-10-30)
 	- Use basic MCTS as v0 but with the following major changes
 		- Count visits before visiting.  Therefore, if I get back to the same node, I won't necessarily loop.
@@ -43,6 +50,7 @@ little or no domain knowledge.
 - [x] Dump previous code into Git repository
 - [x] Fix Cube action order to make standardized
 - [x] Generate and save data for early states
+- [ ] Fix memory leak (may need to use processes)
 - [ ] Improve MCTS algorithm
   - [ ] Add dirichlet noise like in AlphaGo paper (maybe alpha = .75 since there are so few actions)
   - [ ] Record when we get to solution and then set the max_depth to be that value
