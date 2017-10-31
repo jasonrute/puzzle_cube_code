@@ -1,5 +1,6 @@
 import numpy as np
 from batch_cube import BatchCube
+import warnings
 
 action_count = 12
 c_puct = 10.0
@@ -199,6 +200,15 @@ class MCTSAgent():
         self.initial_node.prior_probabilities = \
             .75 * self.initial_node.state.calculate_priors_and_value(model)[0] +\
             .25 * np.random.dirichlet([.5]*action_count, 1)[0]
+
+    def stats(self, key):
+        """ Proviods various stats on the MCTS """
+        if key == 'to_fill_in_each_keyword':
+            #do something
+            pass
+        else:
+            warnings.warn("'{}' argument not implemented for stats".format(key), stacklevel=2)
+            return None
 
 ## To later remove ##
 
