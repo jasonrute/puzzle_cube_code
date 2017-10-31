@@ -80,6 +80,11 @@ class MCTSNode():
         # terminal nodes are good
         if self.terminal:
             #print("... terminal node, returning 1")
+            # record shortest distance to target
+            depth = mcts_agent.max_depth - max_depth
+            if depth < mcts_agent.shortest_path:
+                mcts_agent.shortest_path = depth
+
             return 1.
 
         # we stop at leaf nodes
@@ -165,6 +170,8 @@ class MCTSAgent():
             .75 * self.model_policy_value(self.initial_node.state.input_array())[0] +\
             .25 * np.random.dirichlet([.5]*action_count, 1)[0]
 
+        self.shortest_path = self.max_depth + 1
+
     def search(self, steps):
         for s in range(steps):
             self.initial_node.select_leaf_and_update(self, self.max_depth) # explore new leaf node
@@ -198,12 +205,24 @@ class MCTSAgent():
         self.initial_node.prior_probabilities = \
             .75 * self.model_policy_value(self.initial_node.state.input_array())[0] +\
             .25 * np.random.dirichlet([.5]*action_count, 1)[0]
+        
+        self.shortest_path = self.max_depth + 1
 
     def stats(self, key):
         """ Proviods various stats on the MCTS """
-        if key == 'to_fill_in_each_keyword':
-            #do something
-            pass
+        
+        if key == 'shortest_path':
+            return self.shortest_path if self.shortest_path <= self.max_depth else -1
+        elif key == 'prior':
+            return self.model_policy_value(self.initial_node.state.input_array())[0]
+        elif key == 'prior_dirichlet':
+            return self.initial_node.prior_probabilities
+        elif key == 'value':
+            return self.model_policy_value(self.initial_node.state.input_array())[1]
+        elif key == 'visit_counts':
+            return self.initial_node.visit_counts
+        elif key == 'total_action_values':
+            return self.initial_node.total_action_values
         else:
             warnings.warn("'{}' argument not implemented for stats".format(key), stacklevel=2)
             return None
