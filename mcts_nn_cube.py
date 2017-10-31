@@ -48,26 +48,23 @@ class State():
         return str(self.internal_state)
 
 class MCTSNode():
-    def __init__(self, state, transposition_table, model):
+    def __init__(self, mcts_agent, state):
         self.state = state
         self.terminal = state.done()
 
         if not self.terminal:
             self.is_leaf_node = True
-            self.prior_probabilities, self.node_value = state.calculate_priors_and_value(model)
+            self.prior_probabilities, self.node_value = state.calculate_priors_and_value(mcts_agent.model)
             self.total_visit_counts = 0
             self.visit_counts = np.zeros(action_count, dtype=int)
             self.total_action_values = np.zeros(action_count)
             self.mean_action_values = np.zeros(action_count)
             self.children = [None] * action_count
 
-            self.transposition_table = transposition_table
-            self.model = model
-
     def upper_confidence_bounds(self):
         return (c_puct * np.sqrt(self.total_visit_counts)) * self.prior_probabilities / (1 + self.visit_counts)
 
-    def child(self, action):
+    def child(self, mcts_agent, action):
         # return node if already indexed
         child_node = self.children[action]
         if child_node is not None:
@@ -76,16 +73,18 @@ class MCTSNode():
         # check transposition table
         next_state = self.state.next(action)
         key = next_state.key()
-        if key in self.transposition_table:
-            return self.transposition_table[key]
+        if key in mcts_agent.transposition_table:
+            node = mcts_agent.transposition_table[key]
+            self.children[action] = node
+            return node
 
         # create new node
-        new_node = MCTSNode(next_state, self.transposition_table, self.model)
+        new_node = MCTSNode(mcts_agent, next_state)
         self.children[action] = new_node
-        self.transposition_table[key] = new_node
+        mcts_agent.transposition_table[key] = new_node
         return new_node
 
-    def select_leaf_and_update(self, max_depth):
+    def select_leaf_and_update(self, mcts_agent, max_depth):
         #print("Entering Node:", self.state, "Depth:", max_depth)
         # terminal nodes are good
         if self.terminal:
@@ -112,7 +111,8 @@ class MCTSNode():
         self.visit_counts[action] += 1
 
         #print("Performing Action:", action)
-        action_value = gamma * self.child(action).select_leaf_and_update(max_depth - 1)
+        action_value = gamma * self.child(mcts_agent, action) \
+                                   .select_leaf_and_update(mcts_agent, max_depth - 1)
         #print("Returning back to:", max_depth)
         
         # recursively update edge values
@@ -169,14 +169,14 @@ class MCTSAgent():
         self.total_steps = 0
         self.transposition_table = transposition_table
 
-        self.initial_node = MCTSNode(initial_state, self.transposition_table, self.model)
+        self.initial_node = MCTSNode(self, initial_state)
         self.initial_node.prior_probabilities = \
             .75 * self.initial_node.state.calculate_priors_and_value(model)[0] +\
             .25 * np.random.dirichlet([.5]*action_count, 1)[0]
 
     def search(self, steps):
         for s in range(steps):
-            self.initial_node.select_leaf_and_update(self.max_depth) # explore new leaf node
+            self.initial_node.select_leaf_and_update(self, self.max_depth) # explore new leaf node
             self.total_steps += 1
 
     def action_visit_counts(self):
@@ -196,7 +196,7 @@ class MCTSAgent():
         # TOFIX: I should (maybe?) find a way to delete the nodes not below this one, 
         # including from the tranposition table
         best_action = np.argmax(self.action_visit_counts())
-        self.initial_node = self.initial_node.child(best_action) 
+        self.initial_node = self.initial_node.child(self, best_action) 
         self.initial_node.prior_probabilities = \
             .75 * self.initial_node.state.calculate_priors_and_value(model)[0] +\
             .25 * np.random.dirichlet([.5]*action_count, 1)[0]
