@@ -29,15 +29,6 @@ class State():
     def input_array(self):
         return self.internal_state.bit_array().reshape((1, 6*54))
 
-    def calculate_priors_and_value(self, model):
-        """ 
-        For now, this does nothing special.  It evenly weights all actions,
-        and it gives a nuetral value (0 out of [-1,1]) to each non-terminal node.
-        """
-        prior = model.predict(self.input_array()).reshape((12,))
-        value = .01
-        return prior, value
-
     def key(self):
         return self.internal_state.bit_array().tobytes()
 
@@ -54,7 +45,7 @@ class MCTSNode():
 
         if not self.terminal:
             self.is_leaf_node = True
-            self.prior_probabilities, self.node_value = state.calculate_priors_and_value(mcts_agent.model)
+            self.prior_probabilities, self.node_value = mcts_agent.model_policy_value(state.input_array())
             self.total_visit_counts = 0
             self.visit_counts = np.zeros(action_count, dtype=int)
             self.total_action_values = np.zeros(action_count)
@@ -163,15 +154,15 @@ class MCTSNode():
 
 class MCTSAgent():
 
-    def __init__(self, model, initial_state, max_depth, transposition_table={}):
-        self.model = model
+    def __init__(self, model_policy_value, initial_state, max_depth, transposition_table={}):
+        self.model_policy_value = model_policy_value
         self.max_depth = max_depth
         self.total_steps = 0
         self.transposition_table = transposition_table
 
         self.initial_node = MCTSNode(self, initial_state)
         self.initial_node.prior_probabilities = \
-            .75 * self.initial_node.state.calculate_priors_and_value(self.model)[0] +\
+            .75 * self.model_policy_value(self.initial_node.state.input_array())[0] +\
             .25 * np.random.dirichlet([.5]*action_count, 1)[0]
 
     def search(self, steps):
@@ -205,7 +196,7 @@ class MCTSAgent():
         
         self.initial_node = self.initial_node.child(self, action) 
         self.initial_node.prior_probabilities = \
-            .75 * self.initial_node.state.calculate_priors_and_value(self.model)[0] +\
+            .75 * self.model_policy_value(self.initial_node.state.input_array())[0] +\
             .25 * np.random.dirichlet([.5]*action_count, 1)[0]
 
     def stats(self, key):
@@ -235,6 +226,11 @@ def main():
     model.compile(loss=categorical_crossentropy,
                   optimizer=Adam(lr=0.001))
 
+    def model_policy_value(input_array):
+        policy = model.predict(input_array).reshape((12,))
+        value = 0.1
+        return policy, value
+
     #model.load_weights("./save/mcts_nn_cube.h5")
     max_random = 5
     while True:
@@ -245,13 +241,13 @@ def main():
             print("random dist: {}/{}".format(r, max_random), "step:", i)
             state = State()
             state.reset_and_randomize(r)
-            mcts = MCTSAgent(model, state, max_depth=100)
+            mcts = MCTSAgent(model_policy_value, state, max_depth=100)
             #print(mcts.initial_node.state)
             if mcts.is_terminal():
                 print("Done!")
             else:
                 mcts.search(steps = 10000)
-                prior, _ = mcts.initial_node.state.calculate_priors_and_value(model)
+                prior, _ = model_policy_value(mcts.initial_node.state.input_array())
                 prior2 = mcts.initial_node.prior_probabilities
                 probs = mcts.action_probabilities(inv_temp = 1)
                 q = mcts.initial_node.mean_action_values
