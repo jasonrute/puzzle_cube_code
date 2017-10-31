@@ -171,7 +171,7 @@ class MCTSAgent():
 
         self.initial_node = MCTSNode(self, initial_state)
         self.initial_node.prior_probabilities = \
-            .75 * self.initial_node.state.calculate_priors_and_value(model)[0] +\
+            .75 * self.initial_node.state.calculate_priors_and_value(self.model)[0] +\
             .25 * np.random.dirichlet([.5]*action_count, 1)[0]
 
     def search(self, steps):
@@ -193,12 +193,19 @@ class MCTSAgent():
 
     def advance_to_best_child(self):
         """ Advance to the best child node """
+        
+        best_action = np.argmax(self.action_visit_counts())
+        self.advance_to_action(best_action)
+
+    def advance_to_action(self, action):
+        """ Advance to a child node via the given action """
+        
         # TOFIX: I should (maybe?) find a way to delete the nodes not below this one, 
         # including from the tranposition table
-        best_action = np.argmax(self.action_visit_counts())
-        self.initial_node = self.initial_node.child(self, best_action) 
+        
+        self.initial_node = self.initial_node.child(self, action) 
         self.initial_node.prior_probabilities = \
-            .75 * self.initial_node.state.calculate_priors_and_value(model)[0] +\
+            .75 * self.initial_node.state.calculate_priors_and_value(self.model)[0] +\
             .25 * np.random.dirichlet([.5]*action_count, 1)[0]
 
     def stats(self, key):
