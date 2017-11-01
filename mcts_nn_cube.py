@@ -230,7 +230,7 @@ class MCTSAgent():
 ## To later remove ##
 
 def prob_box(p):
-        return " ▁▂▃▄▅▆▇▉"[int(round(p*8))]
+        return " ▁▂▃▄▅▆▇█"[int(round(p*8))]
         
 def main():
     from keras.models import Sequential
