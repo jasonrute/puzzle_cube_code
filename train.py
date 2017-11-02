@@ -30,7 +30,7 @@ class TrainingAgent():
 
         # MCTS parameters (fixed)
         self.max_depth = 900
-        self.max_steps = 10000
+        self.max_steps = 1600
         self.use_prebuilt_transposition_table = False
         self.decay = 0.95 # gamma
         self.exploration = 1. #c_puct
