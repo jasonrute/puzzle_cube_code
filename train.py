@@ -14,7 +14,6 @@ import warnings
 from mcts_nn_cube import State, MCTSAgent
 
 RUN_VERSION = "v0.1_test2" # this keeps track of the training runs
-gamma = .95
 
 def str_between(s, start, end):
     return (s.split(start))[1].split(end)[0]
@@ -33,7 +32,8 @@ class TrainingAgent():
         self.max_depth = 900
         self.max_steps = 10000
         self.use_prebuilt_transposition_table = False
-        self.prebuilt_value_decay = 0.95
+        self.decay = 0.95 # gamma
+        self.exploration = 1. #c_puct
         self.prebuilt_transposition_table = None # built later
 
         # Training parameters (fixed)
@@ -167,7 +167,9 @@ class TrainingAgent():
         mcts = MCTSAgent(self.model_value_policy, 
                          state, 
                          max_depth=self.max_depth, 
-                         transposition_table=self.prebuilt_transposition_table.copy())
+                         transposition_table=self.prebuilt_transposition_table.copy(),
+                         c_puct = self.exploration,
+                         gamma = self.decay)
 
         counter = 0
         win = True
@@ -214,7 +216,7 @@ class TrainingAgent():
         i = np.random.choice(counter) + 1
         self.states.append(self.self_play_stats['state'][-i])
         self.policies.append(self.self_play_stats['policy'][-i])
-        self.values.append(gamma**i if win else 0)
+        self.values.append(self.decay**i if win else 0)
         
         # record game stats
         self.game_stats['_game_id'].append(self.game_number-1)

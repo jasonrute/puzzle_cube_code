@@ -3,8 +3,6 @@ from batch_cube import BatchCube
 import warnings
 
 action_count = 12
-c_puct = 10.0
-gamma = .95
 constant_priors = np.array([1/3] * action_count)
 constant_value = .01
 max_depth_value = 0.0
@@ -52,6 +50,7 @@ class MCTSNode():
         self.terminal = state.done()
 
         if not self.terminal:
+            self.c_puct = mcts_agent.c_puct
             self.is_leaf_node = True
             self.prior_probabilities, self.node_value = mcts_agent.model_policy_value(state.input_array())
             self.total_visit_counts = 0
@@ -61,7 +60,7 @@ class MCTSNode():
             self.children = [None] * action_count
 
     def upper_confidence_bounds(self):
-        return (c_puct * np.sqrt(self.total_visit_counts)) * self.prior_probabilities / (1 + self.visit_counts)
+        return (self.c_puct * np.sqrt(self.total_visit_counts)) * self.prior_probabilities / (1 + self.visit_counts)
 
     def child(self, mcts_agent, action):
         # return node if already indexed
@@ -115,8 +114,9 @@ class MCTSNode():
         self.visit_counts[action] += 1
 
         #print("Performing Action:", action)
-        action_value = gamma * self.child(mcts_agent, action) \
-                                   .select_leaf_and_update(mcts_agent, max_depth - 1)
+        action_value = mcts_agent.gamma * \
+                       self.child(mcts_agent, action) \
+                           .select_leaf_and_update(mcts_agent, max_depth - 1)
         #print("Returning back to:", max_depth)
         
         # recursively update edge values
@@ -167,11 +167,13 @@ class MCTSNode():
 
 class MCTSAgent():
 
-    def __init__(self, model_policy_value, initial_state, max_depth, transposition_table={}):
+    def __init__(self, model_policy_value, initial_state, max_depth, transposition_table={}, c_puct=1.0, gamma=.95):
         self.model_policy_value = model_policy_value
         self.max_depth = max_depth
         self.total_steps = 0
         self.transposition_table = transposition_table
+        self.c_puct = c_puct  # exploration constant
+        self.gamma = gamma  # decay constant
 
         self.initial_node = MCTSNode(self, initial_state)
         self.initial_node.prior_probabilities = \
