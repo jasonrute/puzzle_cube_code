@@ -107,25 +107,27 @@ class TrainingAgent():
         """ Finds the best model in the given naming scheme and loads that one """
         import os
 
-        model_files = [f for f in os.listdir('./save/') 
-                             if f.startswith("model_{}_gen".format(RUN_VERSION))
-                             and f.endswith(".h5")]
-        if model_files:
-            best_model_file = max(model_files, 
-                                  key=lambda f: (str_between(f, "_score", ".h5"), 
-                                                 str_between(f, "_gen", "_score")))
-            path = "./save/" + best_model_file
-            
-            print("best model found:", "'" + path + "'")
-            print("loading model ...")
-            self.model.load_weights(path)
-            
-            self.generation = int(str_between(path, "_gen", "_score"))
-            print("generation set to", self.generation)
+        for version in [RUN_VERSION, PREV_VERSION]:
+            model_files = [f for f in os.listdir('./save/') 
+                                 if f.startswith("model_{}_gen".format(version))
+                                 and f.endswith(".h5")]
+            if model_files:
+                best_model_file = max(model_files, 
+                                      key=lambda f: (str_between(f, "_score", ".h5"), 
+                                                     str_between(f, "_gen", "_score")))
+                path = "./save/" + best_model_file
+                
+                print("best model found:", "'" + path + "'")
+                print("loading model ...")
+                self.model.load_weights(path)
+                
+                self.generation = int(str_between(path, "_gen", "_score"))
+                break
 
-        else:
-            print("no model found")
-            print("starting at generation 0")
+            else:
+                print("no model found with version {}".format(version))
+           
+        print("generation set to", self.generation)
 
     def save_model(self):
         file_name = "model_{}_gen{:03}_score{:02}.h5".format(RUN_VERSION, self.generation, self.score)
