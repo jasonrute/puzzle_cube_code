@@ -19,7 +19,7 @@ little or no domain knowledge.
 - A todo list is stored below
 
 ## Results (most recent first):
-- v0.1.test2 (2017-10-30)
+- v0.1.test2 (2017-11-01)
 	- First version using training agent
 	- New Features:
 		- Plays 100 games per generation
@@ -40,8 +40,10 @@ little or no domain knowledge.
 			- Provides more exploration
 			- Prevents the NN from memorizing the prior when it can't find a solution.
 	- Results
-		- It worked pretty well up to distance 5 and then the MCTS could find the solution,
-		  but it often wasn't showing up as the most visited action, so it made the wrong move.
+		- It worked pretty well up to distance 5.
+		- After distance 5, the MCTS did find a solution,
+		  but it often wasn't showing up as the most visited action,
+		  so it chose the wrong move.
 		  (This can be fixed by lowering cpuct to 1.0)
 		- The adaptive difficulty algorithm had a bad habit of hanging out at the lowest difficulty.
 - v0.0.3 (2017-10-30)
