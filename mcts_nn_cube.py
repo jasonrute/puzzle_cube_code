@@ -17,6 +17,14 @@ class State():
         
         self.internal_state = internal_state
 
+    def copy(self):
+        return State(self.internal_state.copy())
+
+    def import_bit_array(self, bit_array):
+        color_idx = np.indices((1, 54, 6))[2]
+        array = (color_idx * bit_array.reshape((1, 54, 6))).max(axis=2)
+        self.internal_state = BatchCube(cube_array=array)
+
     def reset_and_randomize(self, depth):
         self.internal_state = BatchCube(1)
         self.internal_state.randomize(depth)
