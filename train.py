@@ -13,7 +13,8 @@ import warnings
 
 from mcts_nn_cube import State, MCTSAgent
 
-RUN_VERSION = "v0.1_test2" # this keeps track of the training runs
+RUN_VERSION = "v0.2" # this keeps track of the training runs
+PREV_VERSION = "v0.1_test2" # extend a previous training run under a different verion number
 
 def str_between(s, start, end):
     return (s.split(start))[1].split(end)[0]
