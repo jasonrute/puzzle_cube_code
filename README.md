@@ -79,10 +79,26 @@ little or no domain knowledge.
 - [x] Generate and save data for early states
 - [ ] Fix memory leak (may need to use processes)
 - [ ] Improve MCTS algorithm
-  - [ ] Add dirichlet noise like in AlphaGo paper (maybe alpha = .75 since there are so few actions)
-  - [ ] Record when we get to solution and then set the max_depth to be that value
-    - [ ] Not sure what value to use for leaf nodes (maybe 0 is fine)  
-- [ ] Develop outline of a better training process
-  - [ ] Make training file
-  - [ ] Split off components of the training process into their own files as it makes sense
-- [ ] 
+	- [x] Add dirichlet noise like in AlphaGo paper (maybe alpha = .75 since there are so few actions)
+	- [ ] Record when we get to solution and then set the max_depth to be that value
+    	- [ ] Not sure what value to use for leaf nodes (maybe 0 is fine)  
+- [x] Develop outline of a better training process
+	- [x] Make training file
+	- [ ] Split off components of the training process into their own files as it makes sense
+- [ ] Improve adaptive difficulty algorithm
+- [ ] Find adaptive method to set exploration constant c_puct
+- [ ] Fix statistics
+	- [ ] Fix numbering in one of the statistics
+	- [ ] Find better way to store arrays in a data frame
+		- [ ] Keep states separate 
+		- [ ] Store policies and other action_based statistics as 12 seperate columns
+	- [ ] Then store using 'table' mode
+- [ ] Store more statistics 
+	- [ ] memory consumption
+	- [ ] the date/time of start/stop for each generation
+	- [ ] which action the shortest path was found in
+	- [ ] statistics which could be re-computated but it is easier to take them since 
+	      they are already computed
+	- [ ] all the parameters (c_puct, decay, max number of moves per game, ect.)
+	- [ ] 
+	
