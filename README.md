@@ -19,6 +19,31 @@ little or no domain knowledge.
 - A todo list is stored below
 
 ## Results (most recent first):
+- v0.1.test2 (2017-10-30)
+	- First version using training agent
+	- New Features:
+		- Plays 100 games per generation
+		- Game consists of MCTS for each move, then chooses best move as next move
+		- If no solution found in MCTS, then quit to save computation
+		- Loads best model and saves it
+		- Saves a lot of statistics
+		- Adaptive difficulty
+			- The algorithm isn't great
+			- If the win rate for this generation > .85 then increase difficulty +1
+			- If the win rate for this generation < .75 then decrease difficulty -1
+			- I started with a min distance of 1 and manually changed it half way through to 5
+	- Some Parameters
+		- cpuct = 10 (turned out to be too big in later stages)
+		- max_steps (per MCTS) = 10000 (maybe too many)
+		- max_steps (per MCTS) = 10000 (maybe too many)
+		- Add in some Dirichlet noise (alpha = .5) to the root node of the MCTS
+			- Provides more exploration
+			- Prevents the NN from memorizing the prior when it can't find a solution.
+	- Results
+		- It worked pretty well up to distance 5 and then the MCTS could find the solution,
+		  but it often wasn't showing up as the most visited action, so it made the wrong move.
+		  (This can be fixed by lowering cpuct to 1.0)
+		- The adaptive difficulty algorithm had a bad habit of hanging out at the lowest difficulty.
 - v0.0.3 (2017-10-30)
 	- Following major changes
 		- Add in some Dirichlet noise (alpha = .5) to the root node of the MCTS
