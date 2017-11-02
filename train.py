@@ -38,8 +38,8 @@ class TrainingAgent():
 
         # Training parameters (fixed)
         self.games_per_generation = 100
-        self.starting_distance = 5
-        self.min_distance = 5
+        self.starting_distance = 6
+        self.min_distance = 6
         self.win_rate_upper = .85
         self.win_rate_lower = .75
         self.max_game_length = 100
