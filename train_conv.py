@@ -51,6 +51,8 @@ class TrainingAgent():
         self.win_rate_upper = .85
         self.win_rate_lower = .75
         self.max_game_length = 100
+        self.prev_generations_used_for_training = 10
+        self.training_sample_size = 1024
 
         # Training parameters (dynamic)
         self.training_distance = self.starting_distance
@@ -76,9 +78,9 @@ class TrainingAgent():
         self.generation_stats = defaultdict(list)
 
         # Training data
-        self.states = []
-        self.policies = []
-        self.values = []
+        self.training_data_states = []
+        self.training_data_policies = []
+        self.training_data_values = []
 
 
 
@@ -233,10 +235,47 @@ class TrainingAgent():
         print("saved model:", "'" + path + "'")
 
     def train_model(self):
-        inputs = np.array(self.states).reshape((-1, 54, 6))
-        inputs = np.rollaxis(inputs, 2, 1).reshape(-1, 6*6, 3, 3)
-        outputs_policy = np.array(self.policies)
-        outputs_value = np.array(self.values)
+        import os
+        import h5py
+
+        inputs_list = []
+        outputs_policy_list = []
+        outputs_value_list = []
+
+        counter = 0
+        for version in VERSIONS:
+            if counter > self.prev_generations_used_for_training:
+                break
+
+            data_files = [(str_between(f, "_gen", "_score"), f)
+                                for f in os.listdir('./save/') 
+                                if f.startswith("data_{}_gen".format(version))
+                                and f.endswith(".h5")]
+            
+            # go through in reverse order
+            for gen, f in reversed(data_files):
+                if counter > self.prev_generations_used_for_training:
+                    break
+                
+                path = "./save/" + f
+
+                print("loading data:", "'" + path + "'")
+
+                with h5py.File(path, 'r') as hf:
+                    inputs_list.append(hf['inputs'][:])
+                    outputs_policy_list.append(hf['outputs_policy'][:])
+                    outputs_value_list.append(hf['outputs_value'][:])
+
+        inputs_all = np.concatenate(inputs_list, axis=0)
+        outputs_policy_all = np.concatenate(outputs_policy_list, axis=0)
+        outputs_value_all = np.concatenate(outputs_value_list, axis=0)
+
+        print("DBDB", inputs_all.shape, outputs_policy_all.shape, outputs_value_all.shape)
+        n = len(inputs_all)
+        sample_idx = np.random.choice(n, size=self.training_sample_size)
+        inputs = inputs_all[sample_idx]
+        outputs_policy = outputs_policy_all[sample_idx]
+        outputs_value = outputs_value_all[sample_idx]
 
         self.model.fit(x=inputs, 
                        y={'policy_output': outputs_policy, 'value_output': outputs_value}, 
@@ -260,9 +299,9 @@ class TrainingAgent():
         self.generation_stats = defaultdict(list)
 
         # Training data (one item per game based on randomly chosen game state)
-        self.states = []
-        self.policies = []
-        self.values = []
+        self.training_data_states = []
+        self.training_data_policies = []
+        self.training_data_values = []
 
         # set start time
         self.self_play_start = datetime.utcnow() # date and time (utc)
@@ -302,10 +341,17 @@ class TrainingAgent():
             self.self_play_stats['prior_dirichlet'].append(mcts.stats('prior_dirichlet'))
             self.self_play_stats['visit_counts'].append(mcts.stats('visit_counts'))
             self.self_play_stats['total_action_values'].append(mcts.stats('total_action_values'))
+
+            # training data (also recorded in stats)
+            self.training_data_states.append(state.input_array())
             
             self.self_play_stats['policy'].append(mcts.action_probabilities(inv_temp = 1))
             self.self_play_stats['action'].append(action)
+            policy = mcts.action_probabilities(inv_temp = 1)
+            self.training_data_policies.append(policy)
             
+            self.training_data_values.append(0) # updated if game is success
+
             # prepare for next state
             counter += 1 
             if mcts.stats('shortest_path') < 0 or counter >= self.max_game_length:
@@ -314,11 +360,12 @@ class TrainingAgent():
             mcts.advance_to_action(action)
             
 
-        # pick random step for training state
-        i = np.random.choice(counter) + 1
-        self.states.append(self.self_play_stats['state'][-i])
-        self.policies.append(self.self_play_stats['policy'][-i])
-        self.values.append(self.decay**i if win else 0)
+        # update training values based on game results
+        if win:
+            value = 1
+            for i in range(counter):
+                value *= self.decay
+                self.training_data_values[-(i+1)] = value
         
         # record game stats
         self.game_stats['_game_id'].append(self.game_number-1)
@@ -326,7 +373,6 @@ class TrainingAgent():
         self.game_stats['max_game_length'].append(self.max_game_length)
         self.game_stats['win'].append(win)
         self.game_stats['total_steps'].append(counter if win else -1)
-        self.game_stats['sample_step_id'].append(counter - i)
 
         # set up for next game
         self.game_number += 1
@@ -372,6 +418,26 @@ class TrainingAgent():
 
         print("saved stats:", "'" + path + "'")
 
+    def save_training_data(self):
+        # save training_data
+        import h5py
+
+        file_name = "data_{}_gen{:03}_score{:02}.h5".format(VERSIONS[0], self.generation, self.score)
+        path = "./save/" + file_name
+
+        # process arrays now to save time during training
+        inputs = np.array(self.training_data_states).reshape((-1, 54, 6))
+        inputs = np.rollaxis(inputs, 2, 1).reshape(-1, 6*6, 3, 3)
+        outputs_policy = np.array(self.training_data_policies)
+        outputs_value = np.array(self.training_data_values)
+
+        with h5py.File(path, 'w') as hf:
+            hf.create_dataset("inputs",  data=inputs)
+            hf.create_dataset("outputs_policy",  data=outputs_policy)
+            hf.create_dataset("outputs_value",  data=outputs_value)
+
+        print("saved data:", "'" + path + "'")
+
     def evaluate_model(self):
         warnings.warn("evaluate_model is not implemented", stacklevel=2)
 
@@ -399,14 +465,19 @@ def main():
         print("\nSave stats...")
         agent.save_training_stats()
 
+        print("\nSave data...")
+        agent.save_training_data()
+
         print("\nTrain model...")
         agent.train_model()
+
+        print("\nSave model...")
+        agent.save_model()   
 
         print("\nEvaluate model...")
         agent.evaluate_model()
 
-        print("\nSave model...")
-        agent.save_model()     
+          
 
 
 if __name__ == '__main__':
