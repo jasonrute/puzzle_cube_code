@@ -10,11 +10,18 @@ The training routine has three key phases
 import numpy as np
 from collections import defaultdict
 import warnings
+import os, psutil # useful for memory management
+from datetime import datetime
 
 from mcts_nn_cube import State, MCTSAgent
 
 # this keeps track of the training runs, including the older versions that we are extending
-VERSIONS = ["v0.3"] 
+VERSIONS = ["v0.3.test", "v0.3"]
+
+# memory management
+MY_PROCESS = psutil.Process(os.getpid())
+def memory_used():
+    return MY_PROCESS.memory_info().rss
 
 def str_between(s, start, end):
     return (s.split(start))[1].split(end)[0]
@@ -49,6 +56,10 @@ class TrainingAgent():
         self.training_distance = self.starting_distance
         self.total_wins = 0
         self.game_number = 0
+        self.self_play_start = None # date and time (utc)
+        self.self_play_end = None
+        self.training_start = None
+        self.training_end = None
 
         # Evaluation parameters (dynamic)
         self.generation = 0
@@ -62,6 +73,7 @@ class TrainingAgent():
         self.self_play_stats = defaultdict(list)
         self.game_stats = defaultdict(list)
         self.training_stats = defaultdict(list)
+        self.generation_stats = defaultdict(list)
 
         # Training data
         self.states = []
@@ -215,7 +227,7 @@ class TrainingAgent():
         print("generation set to", self.generation)
 
     def save_model(self):
-        file_name = "model_{}_gen{:03}_score{:02}.h5".format(VERSION[0], self.generation, self.score)
+        file_name = "model_{}_gen{:03}_score{:02}.h5".format(VERSIONS[0], self.generation, self.score)
         path = "./save/" + file_name
         self.model.save_weights(path)
         print("saved model:", "'" + path + "'")
@@ -237,15 +249,23 @@ class TrainingAgent():
         self.training_distance = self.starting_distance
         self.total_wins = 0
         self.game_number = 0
+        self.self_play_start = None # date and time (utc)
+        self.self_play_end = None
+        self.training_start = None
+        self.training_end = None
 
         # Self play stats
         self.self_play_stats = defaultdict(list)
         self.game_stats = defaultdict(list)
+        self.generation_stats = defaultdict(list)
 
         # Training data (one item per game based on randomly chosen game state)
         self.states = []
         self.policies = []
         self.values = []
+
+        # set start time
+        self.self_play_start = datetime.utcnow() # date and time (utc)
 
     def play_game(self):
         state = State()
@@ -331,8 +351,22 @@ class TrainingAgent():
     def save_training_stats(self):
         import pandas as pd
 
-        file_name = "stats_{}_gen{:03}_score{:02}.h5".format(VERSION[0], self.generation, self.score)
+        file_name = "stats_{}_gen{:03}_score{:02}.h5".format(VERSIONS[0], self.generation, self.score)
         path = "./save/" + file_name
+
+        # record time of end of self-play
+        self.self_play_end = datetime.utcnow()
+
+        # save generation_stats data
+        self.generation_stats['_generation'].append(self.generation)
+        self.generation_stats['memory_usage'].append(memory_used())
+        self.generation_stats['version_history'].append(",".join(VERSIONS))
+        self.generation_stats['self_play_start_datetime_utc'].append(str(self.self_play_start))
+        self.generation_stats['self_play_end_datetime_utc'].append(str(self.self_play_end))
+        self.generation_stats['self_play_time_sec'].append((self.self_play_end - self.self_play_start).total_seconds())
+        
+        generation_stats_df = pd.DataFrame(data=self.generation_stats)
+        generation_stats_df.to_hdf(path, 'generation_stats', mode='a', format='fixed') #use mode='a' to avoid overwriting
 
         # save game_stats data
         game_stats_df = pd.DataFrame(data=self.game_stats)
@@ -368,14 +402,14 @@ def main():
             print("\nGame {}/{}".format(game, agent.games_per_generation))
             agent.play_game()
 
+        print("\nSave stats...")
+        agent.save_training_stats()
+
         print("\nTrain model...")
         agent.train_model()
 
         print("\nEvaluate model...")
         agent.evaluate_model()
-
-        print("\nSave stats...")
-        agent.save_training_stats()
 
         print("\nSave model...")
         agent.save_model()     
