@@ -13,8 +13,8 @@ import warnings
 
 from mcts_nn_cube import State, MCTSAgent
 
-RUN_VERSION = "v0.3" # this keeps track of the training runs
-PREV_VERSION = None # extend a previous training run under a different verion number
+# this keeps track of the training runs, including the older versions that we are extending
+VERSIONS = ["v0.3"] 
 
 def str_between(s, start, end):
     return (s.split(start))[1].split(end)[0]
@@ -192,7 +192,7 @@ class TrainingAgent():
         """ Finds the best model in the given naming scheme and loads that one """
         import os
 
-        for version in [RUN_VERSION, PREV_VERSION]:
+        for version in VERSIONS:
             model_files = [f for f in os.listdir('./save/') 
                                  if f.startswith("model_{}_gen".format(version))
                                  and f.endswith(".h5")]
@@ -215,7 +215,7 @@ class TrainingAgent():
         print("generation set to", self.generation)
 
     def save_model(self):
-        file_name = "model_{}_gen{:03}_score{:02}.h5".format(RUN_VERSION, self.generation, self.score)
+        file_name = "model_{}_gen{:03}_score{:02}.h5".format(VERSION[0], self.generation, self.score)
         path = "./save/" + file_name
         self.model.save_weights(path)
         print("saved model:", "'" + path + "'")
@@ -331,7 +331,7 @@ class TrainingAgent():
     def save_training_stats(self):
         import pandas as pd
 
-        file_name = "stats_{}_gen{:03}_score{:02}.h5".format(RUN_VERSION, self.generation, self.score)
+        file_name = "stats_{}_gen{:03}_score{:02}.h5".format(VERSION[0], self.generation, self.score)
         path = "./save/" + file_name
 
         # save game_stats data
