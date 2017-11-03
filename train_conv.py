@@ -270,7 +270,6 @@ class TrainingAgent():
         outputs_policy_all = np.concatenate(outputs_policy_list, axis=0)
         outputs_value_all = np.concatenate(outputs_value_list, axis=0)
 
-        print("DBDB", inputs_all.shape, outputs_policy_all.shape, outputs_value_all.shape)
         n = len(inputs_all)
         sample_idx = np.random.choice(n, size=self.training_sample_size)
         inputs = inputs_all[sample_idx]
