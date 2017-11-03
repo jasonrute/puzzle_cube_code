@@ -8,7 +8,7 @@ The training routine has three key phases
 - Neural network training
 """
 import numpy as np
-from collections import defaultdict
+from collections import defaultdict, deque
 import warnings
 import os, psutil # useful for memory management
 from datetime import datetime
@@ -48,15 +48,19 @@ class TrainingAgent():
         self.games_per_generation = 100
         self.starting_distance = 1
         self.min_distance = 6
+        self.win_rate_memory = 100 # number of games used for win rate calculation
         self.win_rate_upper = .85
         self.win_rate_lower = .75
         self.max_game_length = 100
         self.prev_generations_used_for_training = 10
         self.training_sample_size = 1024
 
-        # Training parameters (dynamic)
+        # Training parameters preserved between generations
         self.training_distance = self.starting_distance
-        self.total_wins = 0
+        self.recent_results = deque()
+        self.win_counter = 0
+
+        # Training parameters (dynamic)
         self.game_number = 0
         self.self_play_start = None # date and time (utc)
         self.self_play_end = None
@@ -284,8 +288,6 @@ class TrainingAgent():
 
     def reset_self_play(self):
         # Training parameters (dynamic)
-        self.training_distance = self.starting_distance
-        self.total_wins = 0
         self.game_number = 0
         self.self_play_start = None # date and time (utc)
         self.self_play_end = None
@@ -377,17 +379,25 @@ class TrainingAgent():
 
         # set up for next game
         self.game_number += 1
-        self.total_wins += win 
-        print("(DB) win:", win, "total_wins:", self.total_wins, 
-              "upper:", self.win_rate_upper * self.game_number, 
-              "lower:", self.win_rate_lower * self.game_number)
-        if self.total_wins > self.win_rate_upper * self.game_number:
-            # Too many wins, make it harder
-            self.training_distance += 1
-        elif self.total_wins < self.win_rate_lower * self.game_number:
-            # Too few wins, make it easier
-            if self.training_distance > self.min_distance:
-                self.training_distance -= 1
+        self.win_counter += win
+        if len(self.recent_results) == self.win_rate_memory:
+            # out of memory, forget last value
+            self.win_counter -= self.recent_results.popleft()
+        self.recent_results.append(win)
+
+        print("(DB) win:", win, "recent_wins:", self.win_counter, 
+              "lower:", self.win_rate_lower * len(self.recent_results), 
+              "upper:", self.win_rate_upper * len(self.recent_results))
+        
+        # update difficulty every 10 games
+        if self.game_number % 10 == 0:
+            if self.win_counter > self.win_rate_upper * len(self.recent_results):
+                # Too many wins, make it harder
+                self.training_distance += 1
+            elif self.win_counter < self.win_rate_lower * len(self.recent_results):
+                # Too few wins, make it easier
+                if self.training_distance > self.min_distance:
+                    self.training_distance -= 1
 
     def save_training_stats(self):
         import pandas as pd
