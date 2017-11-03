@@ -144,7 +144,8 @@ class MCTSNode():
         if inv_temp == 1:
             return self.visit_counts / self.visit_counts.sum()
         else:
-            exponentiated_visit_counts = self.visit_counts ** inv_temp
+            # scale before exponentiation (the result is the same, but less likely to overflow)
+            exponentiated_visit_counts = (self.visit_counts / self.visit_counts.sum()) ** inv_temp
             return exponentiated_visit_counts / exponentiated_visit_counts.sum() 
 
     def status(self):
