@@ -19,6 +19,20 @@ little or no domain knowledge.
 - A todo list is stored below
 
 ## Results (most recent first):
+- v0.2 (2017-11-02, -03)
+	- Started training over with a residual convolutional network
+	- The network was faster than expected and could possibily made larger
+	- The network reached .87 sucess on distance 6, but eventually decresed to .65 success
+	  (This suggests that I need to be sure to keep playing with the best network.)
+- v0.2 (2017-11-02)
+	- Continue training from v0.1.test2, but changed the following:
+		- exploration constant is now 1.0 (was 10.0) so it finds solutions better
+		- only does 1600 MCTS simulations (was 10000) during exploration
+		- increase starting distance to 6
+	- Results:
+		- Lowering the exploration constant allowed us to find solutions.
+		- It got up to about .85 success on random distance 6
+		- Then it stalled 
 - v0.1.test2 (2017-11-01)
 	- First version using training agent
 	- New Features:
