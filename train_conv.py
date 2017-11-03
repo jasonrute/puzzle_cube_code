@@ -333,10 +333,11 @@ class TrainingAgent():
             # record stats
             self.self_play_stats['_game_id'].append(self.game_number)
             self.self_play_stats['_step_id'].append(counter)
-            self.self_play_stats['state'].append(state.input_array())
-            
+            #self.self_play_stats['state']  # find a better representation of the state (that is easy to import)
             self.self_play_stats['shortest_path'].append(mcts.stats('shortest_path'))
+            self.self_play_stats['action'].append(action)
             self.self_play_stats['value'].append(mcts.stats('value'))
+
             self.self_play_stats['prior'].append(mcts.stats('prior'))
             self.self_play_stats['prior_dirichlet'].append(mcts.stats('prior_dirichlet'))
             self.self_play_stats['visit_counts'].append(mcts.stats('visit_counts'))
@@ -345,12 +346,12 @@ class TrainingAgent():
             # training data (also recorded in stats)
             self.training_data_states.append(state.input_array())
             
-            self.self_play_stats['policy'].append(mcts.action_probabilities(inv_temp = 1))
-            self.self_play_stats['action'].append(action)
             policy = mcts.action_probabilities(inv_temp = 1)
             self.training_data_policies.append(policy)
+            self.self_play_stats['updated_policy'].append(policy)
             
             self.training_data_values.append(0) # updated if game is success
+            self.self_play_stats['updated_value'].append(0)
 
             # prepare for next state
             counter += 1 
@@ -366,9 +367,10 @@ class TrainingAgent():
             for i in range(counter):
                 value *= self.decay
                 self.training_data_values[-(i+1)] = value
+                self.self_play_stats['updated_value'][-(i+1)] = value
         
         # record game stats
-        self.game_stats['_game_id'].append(self.game_number-1)
+        self.game_stats['_game_id'].append(self.game_number)
         self.game_stats['training_distance'].append(self.training_distance)
         self.game_stats['max_game_length'].append(self.max_game_length)
         self.game_stats['win'].append(win)
