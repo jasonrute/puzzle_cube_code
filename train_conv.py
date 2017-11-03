@@ -281,16 +281,8 @@ class TrainingAgent():
 
         counter = 0
         win = True
-        lost_path = False
         while not mcts.is_terminal():
             print("(DB) step:", counter, "training dist:", self.training_distance)
-            if counter >= self.max_game_length:
-                win = False
-                break
-
-            if lost_path:
-                win = False
-                break
 
             mcts.search(steps=self.max_steps)
 
@@ -315,10 +307,12 @@ class TrainingAgent():
             self.self_play_stats['action'].append(action)
             
             # prepare for next state
-            if mcts.stats('shortest_path') < 0:
-                lost_path = True
-            mcts.advance_to_action(action)
             counter += 1 
+            if mcts.stats('shortest_path') < 0 or counter >= self.max_game_length:
+                win = False
+                break
+            mcts.advance_to_action(action)
+            
 
         # pick random step for training state
         i = np.random.choice(counter) + 1
