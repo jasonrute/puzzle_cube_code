@@ -16,7 +16,7 @@ from datetime import datetime
 from mcts_nn_cube import State, MCTSAgent
 
 # this keeps track of the training runs, including the older versions that we are extending
-VERSIONS = ["v0.3.test", "v0.3"]
+VERSIONS = ["v0.3.test2", "v0.3.test", "v0.3"]
 
 # memory management
 MY_PROCESS = psutil.Process(os.getpid())
@@ -46,7 +46,7 @@ class TrainingAgent():
 
         # Training parameters (fixed)
         self.games_per_generation = 100
-        self.starting_distance = 1
+        self.starting_distance = 10
         self.min_distance = 6
         self.win_rate_memory = 100 # number of games used for win rate calculation
         self.win_rate_upper = .55
