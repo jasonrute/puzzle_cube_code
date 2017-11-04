@@ -49,8 +49,8 @@ class TrainingAgent():
         self.starting_distance = 1
         self.min_distance = 6
         self.win_rate_memory = 100 # number of games used for win rate calculation
-        self.win_rate_upper = .85
-        self.win_rate_lower = .75
+        self.win_rate_upper = .55
+        self.win_rate_lower = .45
         self.max_game_length = 100
         self.prev_generations_used_for_training = 10
         self.training_sample_size = 1024
@@ -327,7 +327,7 @@ class TrainingAgent():
             mcts.search(steps=self.max_steps)
 
             # find next state
-            probs = mcts.action_probabilities(inv_temp = 1)
+            probs = mcts.action_probabilities(inv_temp = 10)
             action = np.argmax(probs)
             #action = np.random.choice(12, p=probs)
 
@@ -347,7 +347,7 @@ class TrainingAgent():
             # training data (also recorded in stats)
             self.training_data_states.append(state.input_array())
             
-            policy = mcts.action_probabilities(inv_temp = 1)
+            policy = mcts.action_probabilities(inv_temp = 10)
             self.training_data_policies.append(policy)
             self.self_play_stats['updated_policy'].append(policy)
             
