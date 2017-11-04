@@ -90,6 +90,74 @@ forward_action_array =\
 
 action_array = forward_action_array[[6, 0, 7, 1, 8, 2, 9, 3, 10, 4, 11, 5]]
 
+class BatchActionCombo:
+    """ 
+    This class stores an array of actions, which can be a combination of the 12 basic actions.
+    The actions are represented as permutations of [0, ... , 53]
+
+    This is supposed to behave as an immutable object.
+    """
+
+    def __init__(self, permutations):
+        self._permutations = permutations.copy()
+
+    def __len__(self):
+        return len(self._permutations)
+    
+    def multiply(self, other):
+        """
+        Combine actions in parallel.  Assuming the shapes are the same.
+        """
+        idx = np.indices(self._permutations.shape)[0]
+        new_permutations = self._permutations[idx, other._permutations]
+        return BatchActionCombo(new_permutations)
+
+    def outer_multiply(self, other):
+        """
+        Combine actions independently.  Result has size len(self) x len(other).
+        """
+        self_len = len(self)
+        other_len = len(other)
+
+        permutations_0 = np.repeat(self._permutations, repeats=other_len, axis=0)
+        idx = np.indices(permutations_0.shape)[0]
+        
+        permutations_1 = np.tile(other._permutations, (self_len, 1))
+
+        new_permutations = permutations_0[idx, permutations_1]
+        return BatchActionCombo(new_permutations)
+
+    def remove_duplicates(self):
+        """
+        Removes duplicates by passing through a set
+        This may change the order.
+        """
+        return BatchActionCombo(np.array(list({tuple(perm) for perm in self._permutations})))
+
+    # static methods
+
+    @staticmethod
+    def identity():
+        return BatchActionCombo(np.arange(54)[np.newaxis])
+
+    @staticmethod
+    def basic_actions(action_numbers):
+        return BatchActionCombo(action_array[action_numbers])
+
+    @staticmethod
+    def all_actions_up_to(radius):
+        basic_actions = BatchActionCombo.basic_actions(np.arange(12))
+        tuples_outer_level = {tuple(range(54))}
+        tuples = {tuple(range(54))}
+        for _ in range(radius):
+            outer_actions = BatchActionCombo(np.array(list(tuples_outer_level)))
+            actions = outer_actions.outer_multiply(basic_actions)
+            tuples_outer_level = {row_tuple for row_tuple in map(tuple, actions._permutations)
+                                            if row_tuple not in tuples_outer_level}
+            tuples.update(tuples_outer_level)
+            
+        return BatchActionCombo(np.array(list(tuples)))
+
 class BatchCube():
     """
     An implementation of a vector of Rubik's cubes using NumPy arrays.
@@ -126,6 +194,25 @@ class BatchCube():
         action_indices = action_array[actions]
         self._cube_array = self._cube_array[self._sample_index, action_indices]
 
+    def perform_action_combo(self, action_combos):
+        """
+        Assuming the action_combo is an array with same shape as self._cube_array
+        """
+        self._cube_array = self._cube_array[self._sample_index, action_combos._permutations]
+
+    def perform_action_combo_independent(self, action_combos):
+        """
+        Performs all action combos independently on each state
+        """
+        action_len = len(action_combos)
+        cubes_len = len(self._cube_array)
+        
+        self._cube_array = np.repeat(self._cube_array, repeats=action_len, axis=0)
+        self._sample_index = np.indices(self._cube_array.shape)[0]
+        new_action_combos = BatchActionCombo(np.tile(action_combos._permutations, (cubes_len, 1)))
+        
+        self.perform_action_combo(new_action_combos)
+
     def step_independent(self, actions):
         """
         Performs all actions independently on each state
@@ -138,6 +225,13 @@ class BatchCube():
         actions = np.tile(actions, cubes_len)
         
         self.step(actions)
+
+    def get_neighbors(self, radius):
+        """
+        Apply all action combos of radius <= 5 independently.  It only applies equivalent action
+        combos once (but if self has length > 1 then there may be duplicates it doesn't remove.)
+        """
+        self.perform_action_combo_independent(BatchActionCombo.all_actions_up_to(radius))
 
     def randomize(self, dist=100):
         l = len(self._cube_array)
@@ -176,9 +270,27 @@ class BatchCube():
     def remove_done(self):
         self._cube_array = self._cube_array[~self.done()]
         self._sample_index = np.indices(self._cube_array.shape)[0]
-    
+
+    def remove_duplicates(self):
+        """
+        This removes duplicate cubes, but may also change the order
+        """
+        self._cube_array = np.array(list({tuple(row) for row in self._cube_array}))
+        self._sample_index = np.indices(self._cube_array.shape)[0]
+
     def __str__(self):
         return "".join(str(c) for c in self.to_pycuber())
+
+    def __eq__(self, other):
+        return np.array_equal(self._cube_array, other._cube_array)
+
+    def __ne__(self, other):
+        return not self == other
+
+    @staticmethod
+    def concat(batch_cube_list):
+        return BatchCube(cube_array=np.concatenate([bc._cube_array for bc in batch_cube_list], axis=0))
+
 
 if __name__ == '__main__':
     # blank_cube and export
