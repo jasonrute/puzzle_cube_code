@@ -270,6 +270,8 @@ class TrainingAgent():
                     outputs_policy_list.append(hf['outputs_policy'][:])
                     outputs_value_list.append(hf['outputs_value'][:])
 
+                counter += 1
+
         inputs_all = np.concatenate(inputs_list, axis=0)
         outputs_policy_all = np.concatenate(outputs_policy_list, axis=0)
         outputs_value_all = np.concatenate(outputs_value_list, axis=0)
