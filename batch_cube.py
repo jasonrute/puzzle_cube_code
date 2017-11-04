@@ -353,6 +353,13 @@ if __name__ == '__main__':
     print(bc.done().sum())
     assert bc.done().sum() == 14
 
+    # test independent actions
+    bc = BatchCube(2)
+    bc.step_independent(np.arange(12))
+    bc.step_independent(np.arange(12))
+    print(len(bc))
+    assert len(bc) == 2 * 12 * 12
+
     #test randomize
     bc = BatchCube(2)
     bc.randomize(1)
@@ -372,4 +379,105 @@ if __name__ == '__main__':
     bc2.step([0])
     bc2.step([1])
     assert bc2.done()[0] == True
+
+    # test remove duplicates
+    bc = BatchCube(5)
+    bc.step_independent(np.arange(12))
+    bc.remove_duplicates()
+    assert len(bc) == 12
+
+    # test BatchActionCombo.basic_actions and perform_action_combo (as well as __eq__ and __ne__)
+    for a in range(12):
+        bc = BatchCube(1)
+        bc.step([a])
+
+        bac = BatchActionCombo.basic_actions([a])
+        bc2 = BatchCube(1)
+        bc2.perform_action_combo(bac)
+        assert bc == bc2
+        assert not bc != bc2
+
+
+    # test action combos
+    actions1 = np.random.choice(12, 10)
+    actions2 = np.random.choice(12, 10)
+    actions3 = np.random.choice(12, 10)
+
+    bac1 = BatchActionCombo.basic_actions(actions1)
+    bac2 = BatchActionCombo.basic_actions(actions2)
+    bac3 = BatchActionCombo.basic_actions(actions3)
+
+    # three sequential methods
+    bc_a = BatchCube(10)
+    bc_b = BatchCube(10)
+    bc_c = BatchCube(10)
+
+    bc_a.step(actions1)
+    bc_a.step(actions2)
+    bc_a.step(actions3)
+
+    bc_b.perform_action_combo(bac1)
+    bc_b.perform_action_combo(bac2)
+    bc_b.perform_action_combo(bac3)
+
+    bac = bac1.multiply(bac2).multiply(bac3)
+    bc_c.perform_action_combo(bac)
+
+    assert bc_a == bc_b
+    assert bc_b == bc_c
+
+    # three independent methods
+    bc_a = BatchCube(2)
+    bc_b = BatchCube(2)
+    bc_c = BatchCube(2)
+
+    bc_a.step_independent(actions1)
+    bc_a.step_independent(actions2)
+    bc_a.step_independent(actions3)
+
+    bc_b.perform_action_combo_independent(bac1)
+    bc_b.perform_action_combo_independent(bac2)
+    bc_b.perform_action_combo_independent(bac3)
+
+    bac = bac1.outer_multiply(bac2).outer_multiply(bac3)
+    bc_c.perform_action_combo_independent(bac)
+
+    assert bc_a == bc_b
+    assert bc_b == bc_c
     
+
+    # test identity and remove_duplicates
+    a = BatchActionCombo.identity() \
+                        .outer_multiply(BatchActionCombo.basic_actions(np.arange(12))) \
+                        .multiply(BatchActionCombo.basic_actions(np.arange(12)^1))
+    assert len(a) == 12
+    b = a.remove_duplicates()
+    assert len(b) == 1
+
+
+    # test concat
+    bc1 = BatchCube(2)
+    bc2 = BatchCube(3)
+    bc = BatchCube.concat([bc1, bc2])
+    assert len(bc) == 5
+
+    # test get_neighbors
+    bc3 = BatchCube(1)
+    for i in range(3):
+        bc1 = BatchCube(1)
+        bc1.get_neighbors(i)
+
+        bc2 = BatchCube(1)
+        for j in range(i):
+            bc2.step_independent(np.arange(12))
+            bc2.remove_duplicates()
+        
+        bc3 = BatchCube.concat([bc3, bc2])
+        bc3.remove_duplicates()
+
+        bc4 = BatchCube.concat([bc3, bc1])
+        bc4.remove_duplicates()
+
+        print(i, ":", len(bc1), len(bc2), len(bc3), len(bc4))
+        assert len(bc1) == len(bc3)
+        assert len(bc1) == len(bc4)
