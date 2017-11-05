@@ -36,6 +36,8 @@ class TrainingAgent():
         self.action_count = 12
         self.checkpoint_model = None # model used for training (built later)
         self.best_model = None # model used for data generation (built later)
+        self.checkpoint_policy_value = None # function used for training (built later)
+        self.best_policy_value = None # function used for data generation (built later)
 
         # MCTS parameters (fixed)
         self.max_depth = 900
@@ -191,6 +193,24 @@ class TrainingAgent():
 
         return model
 
+    def build_model_policy_value(self, model):
+        cache = {}
+        def model_policy_value(input_array):
+            key = input_array.tobytes()
+            if key in cache:
+                return cache[key]
+            
+            input_array = input_array.reshape((-1, 54, 6))
+            input_array = np.rollaxis(input_array, 2, 1).reshape(-1, 6*6, 3, 3)
+            policy, value = model.predict(input_array)
+            policy = policy.reshape((self.action_count,))
+            value = value[0, 0]
+
+            cache[key] = (policy, value)
+            return policy, value
+
+        return model_policy_value
+
     def build_models(self):
         """
         Builds both checkpoint and best model
@@ -199,13 +219,8 @@ class TrainingAgent():
         self.checkpoint_model = self.starting_model()
         self.best_model = self.starting_model()
 
-    def model_value_policy(self, model, input_array):
-        input_array = input_array.reshape((-1, 54, 6))
-        input_array = np.rollaxis(input_array, 2, 1).reshape(-1, 6*6, 3, 3)
-        policy, value = model.predict(input_array)
-        policy = policy.reshape((self.action_count,))
-        value = value[0, 0]
-        return policy, value
+        self.checkpoint_policy_value = self.build_model_policy_value(self.checkpoint_model)
+        self.best_policy_value = self.build_model_policy_value(self.best_model)
 
     def load_transposition_table(self):
         #TODO: Add this.  For now, just use empty table.
@@ -236,6 +251,7 @@ class TrainingAgent():
                 print("checkpoint model found:", "'" + path + "'")
                 print("loading model ...")
                 self.checkpoint_model.load_weights(path)
+                self.checkpoint_policy_value = self.build_model_policy_value(self.checkpoint_model)
 
                 self.generation = int(str_between(path, "_gen", ".h5"))
                 break
@@ -259,6 +275,7 @@ class TrainingAgent():
                 print("best model found:", "'" + path + "'")
                 print("loading model ...")
                 self.best_model.load_weights(path)
+                self.best_policy_value = self.build_model_policy_value(self.best_model)
 
                 self.best_generation = int(str_between(path, "_gen", ".h5"))
                 break
@@ -281,6 +298,7 @@ class TrainingAgent():
         print("saved model:", "'" + path + "'")
 
         self.best_model.load_weights(path)
+        self.best_policy_value = self.build_model_policy_value(self.best_model)
 
         self.best_generation = self.generation
         
@@ -333,6 +351,8 @@ class TrainingAgent():
                                   y={'policy_output': outputs_policy, 'value_output': outputs_value}, 
                                   epochs=1, verbose=0)
 
+        self.checkpoint_policy_value = self.build_model_policy_value(self.checkpoint_model)
+
     def reset_self_play(self):
         # Training parameters (dynamic)
         self.game_number = 0
@@ -354,13 +374,13 @@ class TrainingAgent():
         # set start time
         self.self_play_start = datetime.utcnow() # date and time (utc)
 
-    def play_game(self, model, state=None, evaluation_game=False):
+    def play_game(self, model_policy_value, state=None, evaluation_game=False):
         if state is None:
             state = State()
             while state.done(): 
                 state.reset_and_randomize(self.training_distance)
 
-        mcts = MCTSAgent(lambda a: self.model_value_policy(model, a), 
+        mcts = MCTSAgent(model_policy_value, 
                          state, 
                          max_depth=self.max_depth, 
                          transposition_table=self.prebuilt_transposition_table.copy(),
@@ -526,7 +546,7 @@ def main():
 
         for game in range(agent.games_per_generation):
             print("\nGame {}/{}".format(game, agent.games_per_generation))
-            agent.play_game(agent.best_model)
+            agent.play_game(agent.best_policy_value)
 
         print("\nSave stats...")
         agent.save_training_stats()
@@ -548,11 +568,11 @@ def main():
         for game in range(agent.games_per_evaluation):
             print("\nEvaluation Game {}/{}".format(game, agent.games_per_evaluation))
             print("\nBest model")
-            state, win = agent.play_game(agent.best_model, state=None, evaluation_game=True)
+            state, win = agent.play_game(agent.best_policy_value, state=None, evaluation_game=True)
             best_model_wins += win
 
             print("\nCheckpoint model")
-            _, win = agent.play_game(agent.checkpoint_model, state=state, evaluation_game=True)
+            _, win = agent.play_game(agent.checkpoint_policy_value, state=state, evaluation_game=True)
             checkpoint_model_wins += win
 
         print("\nEvaluation results")
