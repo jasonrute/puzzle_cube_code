@@ -16,7 +16,7 @@ from datetime import datetime
 from mcts_nn_cube import State, MCTSAgent
 
 # this keeps track of the training runs, including the older versions that we are extending
-VERSIONS = ["v0.3.test2", "v0.3.test", "v0.3"]
+VERSIONS = ["v0.5"]
 
 # memory management
 MY_PROCESS = psutil.Process(os.getpid())
@@ -34,7 +34,8 @@ class TrainingAgent():
         # Model (NN) parameters (fixed)
         self.state_dim = (6*54, )
         self.action_count = 12
-        self.model = None # built later
+        self.checkpoint_model = None # model used for training (built later)
+        self.best_model = None # model used for data generation (built later)
 
         # MCTS parameters (fixed)
         self.max_depth = 900
@@ -45,15 +46,16 @@ class TrainingAgent():
         self.prebuilt_transposition_table = None # built later
 
         # Training parameters (fixed)
-        self.games_per_generation = 100
-        self.starting_distance = 10
-        self.min_distance = 6
+        self.games_per_generation = 1000
+        self.starting_distance = 1
+        self.min_distance = 1
         self.win_rate_memory = 100 # number of games used for win rate calculation
         self.win_rate_upper = .55
         self.win_rate_lower = .45
         self.max_game_length = 100
         self.prev_generations_used_for_training = 10
-        self.training_sample_size = 1024
+        self.training_sample_size = 2024
+        self.games_per_evaluation = 100
 
         # Training parameters preserved between generations
         self.training_distance = self.starting_distance
@@ -69,9 +71,7 @@ class TrainingAgent():
 
         # Evaluation parameters (dynamic)
         self.generation = 0
-        self.score = 0
-        self.old_model = 0
-        self.best_score = 0
+        self.best_generation = 0
 
         # Self play stats
         # These are functionally data tables implemented as a dictionary of lists
@@ -86,11 +86,9 @@ class TrainingAgent():
         self.training_data_policies = []
         self.training_data_values = []
 
-
-
-    def build_model(self):
+    def starting_model(self):
         """
-        Build a neural network model
+        Build and return a new neural network using the current model architecture
         """
         import numpy as np
         from keras.models import Model
@@ -185,16 +183,26 @@ class TrainingAgent():
                                   name='value_output')(hidden)
 
         # combine
-        self.model = Model(inputs=state_input, outputs=[policy_output, value_output])
-        self.model.compile(loss={'policy_output': categorical_crossentropy, 
-                                 'value_output': 'mse'},
-                           loss_weights={'policy_output': 1., 'value_output': 1.},
-                           optimizer=Adam(lr=0.001))
+        model = Model(inputs=state_input, outputs=[policy_output, value_output])
+        model.compile(loss={'policy_output': categorical_crossentropy, 
+                            'value_output': 'mse'},
+                      loss_weights={'policy_output': 1., 'value_output': 1.},
+                      optimizer=Adam(lr=0.001))
 
-    def model_value_policy(self, input_array):
+        return model
+
+    def build_models(self):
+        """
+        Builds both checkpoint and best model
+        May be overwritten later by loaded weights
+        """
+        self.checkpoint_model = self.starting_model()
+        self.best_model = self.starting_model()
+
+    def model_value_policy(self, model, input_array):
         input_array = input_array.reshape((-1, 54, 6))
         input_array = np.rollaxis(input_array, 2, 1).reshape(-1, 6*6, 3, 3)
-        policy, value = self.model.predict(input_array)
+        policy, value = model.predict(input_array)
         policy = policy.reshape((self.action_count,))
         value = value[0, 0]
         return policy, value
@@ -206,37 +214,76 @@ class TrainingAgent():
 
         self.prebuilt_transposition_table = {}
 
-    def load_best_model(self):
-        """ Finds the best model in the given naming scheme and loads that one """
+    def load_models(self):
+        """ 
+        Finds the checkpoint model and the best model in the given naming scheme 
+        and loads those
+        """
         import os
 
+        # load checkpoint model
+        
+        for version in VERSIONS:
+            model_files = [f for f in os.listdir('./save/') 
+                                 if f.startswith("checkpoint_model_{}_gen".format(version))
+                                 and f.endswith(".h5")]
+            if model_files:
+                # choose newest generation
+                model_file = max(model_files, 
+                                      key=lambda f: str_between(f, "_gen", ".h5"))
+                path = "./save/" + model_file
+                
+                print("checkpoint model found:", "'" + path + "'")
+                print("loading model ...")
+                self.checkpoint_model.load_weights(path)
+
+                self.generation = int(str_between(path, "_gen", ".h5"))
+                break
+
+            else:
+                print("no checkpoint model found with version {}".format(version))
+        
+        print("generation set to", self.generation)
+
+        # load best model
         for version in VERSIONS:
             model_files = [f for f in os.listdir('./save/') 
                                  if f.startswith("model_{}_gen".format(version))
                                  and f.endswith(".h5")]
             if model_files:
-                best_model_file = max(model_files, 
-                                      key=lambda f: (str_between(f, "_score", ".h5"), 
-                                                     str_between(f, "_gen", "_score")))
-                path = "./save/" + best_model_file
+                # choose newest generation
+                model_file = max(model_files, 
+                                      key=lambda f: (str_between(f, "_gen", ".h5")))
+                path = "./save/" + model_file
                 
                 print("best model found:", "'" + path + "'")
                 print("loading model ...")
-                self.model.load_weights(path)
-                
-                self.generation = int(str_between(path, "_gen", "_score"))
+                self.best_model.load_weights(path)
+
+                self.best_generation = int(str_between(path, "_gen", ".h5"))
                 break
 
             else:
-                print("no model found with version {}".format(version))
-           
-        print("generation set to", self.generation)
+                print("no best model found with version {}".format(version)) 
 
-    def save_model(self):
-        file_name = "model_{}_gen{:03}_score{:02}.h5".format(VERSIONS[0], self.generation, self.score)
+        print("best generation:", self.generation)
+
+    def save_checkpoint_model(self):
+        file_name = "checkpoint_model_{}_gen{:03}.h5".format(VERSIONS[0], self.generation)
         path = "./save/" + file_name
-        self.model.save_weights(path)
+        self.checkpoint_model.save_weights(path)
+        print("saved model checkpoint:", "'" + path + "'")
+
+    def save_and_set_best_model(self):
+        file_name = "model_{}_gen{:03}.h5".format(VERSIONS[0], self.generation)
+        path = "./save/" + file_name
+        self.checkpoint_model.save_weights(path)
         print("saved model:", "'" + path + "'")
+
+        self.best_model.load_weights(path)
+
+        self.best_generation = self.generation
+        
 
     def train_model(self):
         import os
@@ -251,7 +298,7 @@ class TrainingAgent():
             if counter > self.prev_generations_used_for_training:
                 break
 
-            data_files = [(str_between(f, "_gen", "_score"), f)
+            data_files = [(str_between(f, "_gen", ".h5"), f)
                                 for f in os.listdir('./save/') 
                                 if f.startswith("data_{}_gen".format(version))
                                 and f.endswith(".h5")]
@@ -282,11 +329,9 @@ class TrainingAgent():
         outputs_policy = outputs_policy_all[sample_idx]
         outputs_value = outputs_value_all[sample_idx]
 
-        self.model.fit(x=inputs, 
-                       y={'policy_output': outputs_policy, 'value_output': outputs_value}, 
-                       epochs=1, verbose=0)
-
-        self.generation += 1
+        self.checkpoint_model.fit(x=inputs, 
+                                  y={'policy_output': outputs_policy, 'value_output': outputs_value}, 
+                                  epochs=1, verbose=0)
 
     def reset_self_play(self):
         # Training parameters (dynamic)
@@ -309,12 +354,13 @@ class TrainingAgent():
         # set start time
         self.self_play_start = datetime.utcnow() # date and time (utc)
 
-    def play_game(self):
-        state = State()
-        while state.done(): 
-            state.reset_and_randomize(self.training_distance)
+    def play_game(self, model, state=None, evaluation_game=False):
+        if state is None:
+            state = State()
+            while state.done(): 
+                state.reset_and_randomize(self.training_distance)
 
-        mcts = MCTSAgent(self.model_value_policy, 
+        mcts = MCTSAgent(lambda a: self.model_value_policy(model, a), 
                          state, 
                          max_depth=self.max_depth, 
                          transposition_table=self.prebuilt_transposition_table.copy(),
@@ -333,51 +379,55 @@ class TrainingAgent():
             action = np.argmax(probs)
             #action = np.random.choice(12, p=probs)
 
-            # record stats
-            self.self_play_stats['_game_id'].append(self.game_number)
-            self.self_play_stats['_step_id'].append(counter)
-            #self.self_play_stats['state']  # find a better representation of the state (that is easy to import)
-            self.self_play_stats['shortest_path'].append(mcts.stats('shortest_path'))
-            self.self_play_stats['action'].append(action)
-            self.self_play_stats['value'].append(mcts.stats('value'))
+            shortest_path = mcts.stats('shortest_path')
 
-            self.self_play_stats['prior'].append(mcts.stats('prior'))
-            self.self_play_stats['prior_dirichlet'].append(mcts.stats('prior_dirichlet'))
-            self.self_play_stats['visit_counts'].append(mcts.stats('visit_counts'))
-            self.self_play_stats['total_action_values'].append(mcts.stats('total_action_values'))
+            if not evaluation_game:
+                # record stats
+                self.self_play_stats['_game_id'].append(self.game_number)
+                self.self_play_stats['_step_id'].append(counter)
+                #self.self_play_stats['state']  # find a better representation of the state (that is easy to import)
+                self.self_play_stats['shortest_path'].append(shortest_path)
+                self.self_play_stats['action'].append(action)
+                self.self_play_stats['value'].append(mcts.stats('value'))
 
-            # training data (also recorded in stats)
-            self.training_data_states.append(state.input_array())
-            
-            policy = mcts.action_probabilities(inv_temp = 10)
-            self.training_data_policies.append(policy)
-            self.self_play_stats['updated_policy'].append(policy)
-            
-            self.training_data_values.append(0) # updated if game is success
-            self.self_play_stats['updated_value'].append(0)
+                self.self_play_stats['prior'].append(mcts.stats('prior'))
+                self.self_play_stats['prior_dirichlet'].append(mcts.stats('prior_dirichlet'))
+                self.self_play_stats['visit_counts'].append(mcts.stats('visit_counts'))
+                self.self_play_stats['total_action_values'].append(mcts.stats('total_action_values'))
+
+                # training data (also recorded in stats)
+                self.training_data_states.append(state.input_array())
+                
+                policy = mcts.action_probabilities(inv_temp = 10)
+                self.training_data_policies.append(policy)
+                self.self_play_stats['updated_policy'].append(policy)
+                
+                self.training_data_values.append(0) # updated if game is success
+                self.self_play_stats['updated_value'].append(0)
 
             # prepare for next state
             counter += 1 
-            if mcts.stats('shortest_path') < 0 or counter >= self.max_game_length:
+            if shortest_path < 0 or counter >= self.max_game_length:
                 win = False
                 break
             mcts.advance_to_action(action)
             
 
         # update training values based on game results
-        if win:
-            value = 1
-            for i in range(counter):
-                value *= self.decay
-                self.training_data_values[-(i+1)] = value
-                self.self_play_stats['updated_value'][-(i+1)] = value
+        if not evaluation_game:
+            if win:
+                value = 1
+                for i in range(counter):
+                    value *= self.decay
+                    self.training_data_values[-(i+1)] = value
+                    self.self_play_stats['updated_value'][-(i+1)] = value
         
-        # record game stats
-        self.game_stats['_game_id'].append(self.game_number)
-        self.game_stats['training_distance'].append(self.training_distance)
-        self.game_stats['max_game_length'].append(self.max_game_length)
-        self.game_stats['win'].append(win)
-        self.game_stats['total_steps'].append(counter if win else -1)
+            # record game stats
+            self.game_stats['_game_id'].append(self.game_number)
+            self.game_stats['training_distance'].append(self.training_distance)
+            self.game_stats['max_game_length'].append(self.max_game_length)
+            self.game_stats['win'].append(win)
+            self.game_stats['total_steps'].append(counter if win else -1)
 
         # set up for next game
         self.game_number += 1
@@ -401,10 +451,12 @@ class TrainingAgent():
                 if self.training_distance > self.min_distance:
                     self.training_distance -= 1
 
+        return state, win
+
     def save_training_stats(self):
         import pandas as pd
 
-        file_name = "stats_{}_gen{:03}_score{:02}.h5".format(VERSIONS[0], self.generation, self.score)
+        file_name = "stats_{}_gen{:03}.h5".format(VERSIONS[0], self.generation)
         path = "./save/" + file_name
 
         # record time of end of self-play
@@ -412,6 +464,7 @@ class TrainingAgent():
 
         # save generation_stats data
         self.generation_stats['_generation'].append(self.generation)
+        self.generation_stats['best_model_generation'].append(self.best_generation)
         self.generation_stats['memory_usage'].append(memory_used())
         self.generation_stats['version_history'].append(",".join(VERSIONS))
         self.generation_stats['self_play_start_datetime_utc'].append(str(self.self_play_start))
@@ -435,7 +488,7 @@ class TrainingAgent():
         # save training_data
         import h5py
 
-        file_name = "data_{}_gen{:03}_score{:02}.h5".format(VERSIONS[0], self.generation, self.score)
+        file_name = "data_{}_gen{:03}.h5".format(VERSIONS[0], self.generation)
         path = "./save/" + file_name
 
         # process arrays now to save time during training
@@ -457,14 +510,14 @@ class TrainingAgent():
 def main():
     agent = TrainingAgent()
 
-    print("Build model...")
-    agent.build_model()
+    print("Build models...")
+    agent.build_models()
 
     print("\nLoad pre-built transposition table...")
     agent.load_transposition_table()
 
-    print("\nLoad best model (if any)...")
-    agent.load_best_model()
+    print("\nLoad models (if any)...")
+    agent.load_models()
 
     print("\nBegin training loop...")
     while True:
@@ -473,7 +526,7 @@ def main():
 
         for game in range(agent.games_per_generation):
             print("\nGame {}/{}".format(game, agent.games_per_generation))
-            agent.play_game()
+            agent.play_game(agent.best_model)
 
         print("\nSave stats...")
         agent.save_training_stats()
@@ -485,13 +538,31 @@ def main():
         agent.train_model()
 
         print("\nSave model...")
-        agent.save_model()   
+        agent.save_checkpoint_model()   
 
-        print("\nEvaluate model...")
-        agent.evaluate_model()
+        print("\nBegin evaluation...")
+        agent.reset_self_play()
 
-          
+        checkpoint_model_wins = 0
+        best_model_wins = 0
+        for game in range(agent.games_per_evaluation):
+            print("\nEvaluation Game {}/{}".format(game, agent.games_per_generation))
+            print("\nBest model")
+            state, win = agent.play_game(agent.best_model, state=None, evaluation_game=True)
+            best_model_wins += win
 
+            print("\nCheckpoint model")
+            _, win = agent.play_game(agent.checkpoint_model, state=None, evaluation_game=True)
+            checkpoint_model_wins += win
+
+        if checkpoint_model_wins - best_model_wins > 5:
+            print("\nCheckpoint model is better.")
+            print("\nSave and set as best model...")
+            agent.save_and_set_best_model()
+        else:
+            print("\Current best model is still the best.")
+
+        agent.generation += 1
 
 if __name__ == '__main__':
     try:
