@@ -546,21 +546,24 @@ def main():
         checkpoint_model_wins = 0
         best_model_wins = 0
         for game in range(agent.games_per_evaluation):
-            print("\nEvaluation Game {}/{}".format(game, agent.games_per_generation))
+            print("\nEvaluation Game {}/{}".format(game, agent.games_per_evaluation))
             print("\nBest model")
             state, win = agent.play_game(agent.best_model, state=None, evaluation_game=True)
             best_model_wins += win
 
             print("\nCheckpoint model")
-            _, win = agent.play_game(agent.checkpoint_model, state=None, evaluation_game=True)
+            _, win = agent.play_game(agent.checkpoint_model, state=state, evaluation_game=True)
             checkpoint_model_wins += win
 
+        print("\nEvaluation results")
+        print("Best model:", best_model_wins)
+        print("Checkpoint model:", checkpoint_model_wins)
         if checkpoint_model_wins - best_model_wins > 5:
             print("\nCheckpoint model is better.")
             print("\nSave and set as best model...")
             agent.save_and_set_best_model()
         else:
-            print("\Current best model is still the best.")
+            print("\nCurrent best model is still the best.")
 
         agent.generation += 1
 
