@@ -187,6 +187,16 @@ class BatchCube():
     def bit_array(self):
         return eye6[self._cube_array]
 
+    def load_bit_array(self, bit_array):
+        """
+        Takes in an array of bits of size k * 54 * 6 and converts it to an array of k cubes.
+        It overwrites the array in the object.
+        """
+        
+        bit_array = bit_array.reshape((-1, 54, 6))
+        self._cube_array = (bit_array * np.arange(6)).sum(axis=2)
+        self._sample_index = np.indices(self._cube_array.shape)[0]
+
     def step(self, actions):
         """
         Assuming actions is a list of length = len(self)

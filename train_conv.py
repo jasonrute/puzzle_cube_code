@@ -16,7 +16,7 @@ from datetime import datetime
 from mcts_nn_cube import State, MCTSAgent
 
 # this keeps track of the training runs, including the older versions that we are extending
-VERSIONS = ["v0.5"]
+VERSIONS = ["v0.6", "v0.5"]
 
 # memory management
 MY_PROCESS = psutil.Process(os.getpid())
