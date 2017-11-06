@@ -581,21 +581,29 @@ def main():
         print("\nBegin evaluation...")
         agent.reset_self_play()
 
-        checkpoint_model_wins = 0
         best_model_wins = 0
+        checkpoint_model_wins = 0
+        ties = 0
+
         for game in range(agent.games_per_evaluation):
             print("\nEvaluation Game {}/{}".format(game, agent.games_per_evaluation))
             print("\nBest model")
-            state, distance, win = agent.play_game(agent.best_policy_value, state=None, distance=None, evaluation_game=True)
-            best_model_wins += win
+            state, distance, win1 = agent.play_game(agent.best_policy_value, state=None, distance=None, evaluation_game=True)
 
             print("\nCheckpoint model")
-            _, _, win = agent.play_game(agent.checkpoint_policy_value, state=state, distance=distance, evaluation_game=True)
-            checkpoint_model_wins += win
+            _, _, win2 = agent.play_game(agent.checkpoint_policy_value, state=state, distance=distance, evaluation_game=True)
+            
+            if win1 > win2:
+                best_model_wins += 1
+            elif win1 < win2:
+                checkpoint_model_wins += 1
+            else:
+                ties += 1
 
-        print("\nEvaluation results")
-        print("Best model:", best_model_wins)
-        print("Checkpoint model:", checkpoint_model_wins)
+        print("\nEvaluation results (win/lose/tie)")
+        print("Best model      : {:2} / {:2} / {:2}".format(best_model_wins, checkpoint_model_wins, ties))
+        print("Checkpoint model: {:2} / {:2} / {:2}".format(checkpoint_model_wins, best_model_wins, ties))
+        
         if checkpoint_model_wins - best_model_wins > 5:
             print("\nCheckpoint model is better.")
             print("\nSave and set as best model...")
