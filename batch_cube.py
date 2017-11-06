@@ -310,11 +310,12 @@ if __name__ == '__main__':
     
     
     # import blank_cube and export it
-    bc = BatchCube()
-    bc.from_pycuber([pc.Cube()])
-    print(len(bc))
-    assert len(bc) == 1
-    for c in bc.to_pycuber():
+    bc1 = BatchCube()
+    bc1.from_pycuber([pc.Cube()])
+    print(len(bc1))
+    assert len(bc1) == 1
+    assert bc == bc1
+    for c in bc1.to_pycuber():
         print(c)
         
     
@@ -491,3 +492,23 @@ if __name__ == '__main__':
         print(i, ":", len(bc1), len(bc2), len(bc3), len(bc4))
         assert len(bc1) == len(bc3)
         assert len(bc1) == len(bc4)
+
+    # test load_bit_array
+    bc = BatchCube(10)
+    bc.randomize(100)
+    bit_array = bc.bit_array()
+    bc1 = BatchCube(1)
+    bc1.load_bit_array(bit_array)
+    assert bc == bc1
+
+    # test from_pycuber
+    bc = BatchCube(10)
+    bc.randomize(100)
+    py_cuber_list = bc.to_pycuber()
+    bc1 = BatchCube(1)
+    bc1.from_pycuber(py_cuber_list)
+    print(bc1)
+    assert bc == bc1
+
+    print("All tests successful!")
+
