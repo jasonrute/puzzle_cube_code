@@ -268,7 +268,7 @@ class BatchCube():
         
         pre_array = []
         for cube in pc_list:
-            s = str(c)
+            s = str(cube)
             cube_array = np.array([color_dict[s[i]] for i in pc_indices])
             pre_array.append(cube_array)
         self._cube_array = np.array(pre_array)
