@@ -8,7 +8,7 @@ The training routine has three key phases
 - Neural network training
 """
 import numpy as np
-from collections import defaultdict, deque
+from collections import defaultdict, deque, Counter
 import warnings
 import os, psutil # useful for memory management
 from datetime import datetime
@@ -51,18 +51,16 @@ class TrainingAgent():
         self.games_per_generation = 1000
         self.starting_distance = 1
         self.min_distance = 1
-        self.win_rate_memory = 100 # number of games used for win rate calculation
-        self.win_rate_upper = .55
-        self.win_rate_lower = .45
+        self.win_rate_target = .5
         self.max_game_length = 100
         self.prev_generations_used_for_training = 10
         self.training_sample_size = 2024
         self.games_per_evaluation = 100
 
         # Training parameters preserved between generations
-        self.training_distance = self.starting_distance
-        self.recent_results = deque()
-        self.win_counter = 0
+        self.training_distance_level = float(self.starting_distance)
+        self.recent_wins = Counter()
+        self.recent_games = Counter()
 
         # Training parameters (dynamic)
         self.game_number = 0
@@ -301,7 +299,8 @@ class TrainingAgent():
         self.best_policy_value = self.build_model_policy_value(self.best_model)
 
         self.best_generation = self.generation
-        
+        self.recent_wins = Counter()
+        self.recent_games = Counter()
 
     def train_model(self):
         import os
@@ -374,11 +373,22 @@ class TrainingAgent():
         # set start time
         self.self_play_start = datetime.utcnow() # date and time (utc)
 
-    def play_game(self, model_policy_value, state=None, evaluation_game=False):
+    def play_game(self, model_policy_value, state=None, distance=None, evaluation_game=False):
+        if distance is None:
+            # choose distance
+            lower_dist = int(self.training_distance_level)
+            prob_of_increase = self.training_distance_level - lower_dist
+            distance = lower_dist + np.random.choice(2, p=[1-prob_of_increase, prob_of_increase])
+            
+            lower_dist_win_rate = 0. if self.recent_games[lower_dist] == 0 else self.recent_wins[lower_dist] / self.recent_games[lower_dist]
+            upper_dist_win_rate = 0. if self.recent_games[lower_dist+1] == 0 else self.recent_wins[lower_dist+1] / self.recent_games[lower_dist+1]
+        
+            print("(DB) distance:", distance, 
+                  "(level: {:.2f} win rates: {}: {:.2f} {}: {:.2f})".format(self.training_distance_level, lower_dist, lower_dist_win_rate, lower_dist+1, upper_dist_win_rate))
         if state is None:
             state = State()
             while state.done(): 
-                state.reset_and_randomize(self.training_distance)
+                state.reset_and_randomize(distance)
 
         mcts = MCTSAgent(model_policy_value, 
                          state, 
@@ -390,7 +400,7 @@ class TrainingAgent():
         counter = 0
         win = True
         while not mcts.is_terminal():
-            print("(DB) step:", counter, "training dist:", self.training_distance)
+            print("(DB) step:", counter)
 
             mcts.search(steps=self.max_steps)
 
@@ -444,34 +454,41 @@ class TrainingAgent():
         
             # record game stats
             self.game_stats['_game_id'].append(self.game_number)
-            self.game_stats['training_distance'].append(self.training_distance)
+            self.game_stats['distance_level'].append(self.training_distance_level)
+            self.game_stats['training_distance'].append(distance)
             self.game_stats['max_game_length'].append(self.max_game_length)
             self.game_stats['win'].append(win)
             self.game_stats['total_steps'].append(counter if win else -1)
 
         # set up for next game
         self.game_number += 1
-        self.win_counter += win
-        if len(self.recent_results) == self.win_rate_memory:
-            # out of memory, forget last value
-            self.win_counter -= self.recent_results.popleft()
-        self.recent_results.append(win)
+        if win:
+            print("(DB)", "win")
+        else:
+            print("(DB)", "lose")
 
-        print("(DB) win:", win, "recent_wins:", self.win_counter, 
-              "lower:", self.win_rate_lower * len(self.recent_results), 
-              "upper:", self.win_rate_upper * len(self.recent_results))
-        
-        # update difficulty every 10 games
-        if self.game_number % 10 == 0:
-            if self.win_counter > self.win_rate_upper * len(self.recent_results):
-                # Too many wins, make it harder
-                self.training_distance += 1
-            elif self.win_counter < self.win_rate_lower * len(self.recent_results):
-                # Too few wins, make it easier
-                if self.training_distance > self.min_distance:
-                    self.training_distance -= 1
+        if not evaluation_game:
+            self.recent_wins[distance] += win
+            self.recent_games[distance] += 1
+            
+            # update difficulty
+            upper_dist = 0
+            while True:
+                upper_dist += 1
+                if self.recent_wins[upper_dist] <= self.win_rate_target * self.recent_games[upper_dist]:
+                    break
+            if upper_dist <= self.min_distance:
+                self.training_distance_level = float(self.min_distance)
+            else:
+                lower_dist = upper_dist - 1
+                lower_dist_win_rate = 0. if self.recent_games[lower_dist] == 0 \
+                                        else self.recent_wins[lower_dist] / self.recent_games[lower_dist]
+                upper_dist_win_rate = 0. if self.recent_games[lower_dist+1] == 0 \
+                                        else self.recent_wins[lower_dist+1] / self.recent_games[lower_dist+1]
+                # notice that we won't divide by zero hear since upper_dist_win_rate < lower_dist_win_rate
+                self.training_distance_level = lower_dist + (lower_dist_win_rate - self.win_rate_target) / (lower_dist_win_rate - upper_dist_win_rate)
 
-        return state, win
+        return state, distance, win
 
     def save_training_stats(self):
         import pandas as pd
@@ -485,6 +502,7 @@ class TrainingAgent():
         # save generation_stats data
         self.generation_stats['_generation'].append(self.generation)
         self.generation_stats['best_model_generation'].append(self.best_generation)
+        self.generation_stats['distance_level'].append(self.training_distance_level)
         self.generation_stats['memory_usage'].append(memory_used())
         self.generation_stats['version_history'].append(",".join(VERSIONS))
         self.generation_stats['self_play_start_datetime_utc'].append(str(self.self_play_start))
@@ -568,11 +586,11 @@ def main():
         for game in range(agent.games_per_evaluation):
             print("\nEvaluation Game {}/{}".format(game, agent.games_per_evaluation))
             print("\nBest model")
-            state, win = agent.play_game(agent.best_policy_value, state=None, evaluation_game=True)
+            state, distance, win = agent.play_game(agent.best_policy_value, state=None, distance=None, evaluation_game=True)
             best_model_wins += win
 
             print("\nCheckpoint model")
-            _, win = agent.play_game(agent.checkpoint_policy_value, state=state, evaluation_game=True)
+            _, _, win = agent.play_game(agent.checkpoint_policy_value, state=state, distance=distance, evaluation_game=True)
             checkpoint_model_wins += win
 
         print("\nEvaluation results")
