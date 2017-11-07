@@ -1,11 +1,26 @@
 import numpy as np
-from batch_cube import BatchCube
+from batch_cube import BatchCube, position_permutations, color_permutations, opp_action_permutations
 import warnings
 
 action_count = 12
 constant_priors = np.array([1/3] * action_count)
 constant_value = .01
 max_depth_value = 0.0
+
+def rotationally_randomize(model_policy_value):
+    def rotationally_randomized_policy_value(input_array):
+        # rotate colors
+        input_array = input_array.reshape((54, 6))
+        rotation_id = np.random.choice(48)
+        pos_perm = position_permutations[rotation_id][:,np.newaxis]
+        col_perm = color_permutations[rotation_id][np.newaxis]
+        input_array = input_array[pos_perm, col_perm]
+
+        policy, value = model_policy_value(input_array)
+
+        return policy[opp_action_permutations[rotation_id]], value
+
+    return rotationally_randomized_policy_value
 
 class State():
     """ This is application specfic """
@@ -169,7 +184,7 @@ class MCTSNode():
 class MCTSAgent():
 
     def __init__(self, model_policy_value, initial_state, max_depth, transposition_table={}, c_puct=1.0, gamma=.95):
-        self.model_policy_value = model_policy_value
+        self.model_policy_value = rotationally_randomize(model_policy_value)
         self.max_depth = max_depth
         self.total_steps = 0
         self.transposition_table = transposition_table
