@@ -38,6 +38,7 @@ class TrainingAgent():
         self.best_model = None # model used for data generation (built later)
         self.checkpoint_policy_value = None # function used for training (built later)
         self.best_policy_value = None # function used for data generation (built later)
+        self.learning_rate = .01
 
         # MCTS parameters (fixed)
         self.max_depth = 900
@@ -187,7 +188,7 @@ class TrainingAgent():
         model.compile(loss={'policy_output': categorical_crossentropy, 
                             'value_output': 'mse'},
                       loss_weights={'policy_output': 1., 'value_output': 1.},
-                      optimizer=Adam(lr=0.001))
+                      optimizer=Adam(lr=self.learning_rate))
 
         return model
 
