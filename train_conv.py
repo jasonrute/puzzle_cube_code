@@ -38,7 +38,7 @@ class TrainingAgent():
         self.best_model = None # model used for data generation (built later)
         self.checkpoint_policy_value = None # function used for training (built later)
         self.best_policy_value = None # function used for data generation (built later)
-        self.learning_rate = .01
+        self.learning_rate = .001
 
         # MCTS parameters (fixed)
         self.max_depth = 900
