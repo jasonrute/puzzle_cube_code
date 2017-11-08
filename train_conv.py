@@ -523,6 +523,41 @@ class TrainingAgent():
 
         print("saved stats:", "'" + path + "'")
 
+    def process_training_data(self, inputs, policies, values):
+        """
+        Convert training data to arrays.  
+        Augment with symmetric rotations.  
+        Reshape to fit model input.
+        """
+        from batch_cube import position_permutations, color_permutations, action_permutations
+        
+        inputs = np.array(inputs).reshape((-1, 54, 6))
+        sample_size = inputs.shape[0]
+
+        # augement with all color rotations
+        sample_idx = np.arange(sample_size)[np.newaxis, :, np.newaxis, np.newaxis]
+        pos_perm = position_permutations[:, np.newaxis, :, np.newaxis]
+        col_perm = color_permutations[:, np.newaxis, np.newaxis, :]
+        inputs = inputs[sample_idx, pos_perm, col_perm]
+        inputs = inputs.reshape((-1, 54, 6))
+
+        policies = np.array(policies)
+        sample_idx = np.arange(sample_size)[np.newaxis, :, np.newaxis]
+        action_perm = action_permutations[:, np.newaxis, :]
+        policies = policies[sample_idx, action_perm]
+        policies = policies.reshape((-1, 12))
+        
+        values = np.array(values).reshape((-1, ))
+        values = np.tile(values, 48)
+
+        # process arrays now to save time during training
+        inputs = np.array(self.training_data_states).reshape((-1, 54, 6))
+        inputs = np.rollaxis(inputs, 2, 1).reshape(-1, 6*6, 3, 3)
+        outputs_policy = np.array(self.training_data_policies)
+        outputs_values = np.array(self.training_data_values)
+
+        return inputs, policies, values
+
     def save_training_data(self):
         # save training_data
         import h5py
