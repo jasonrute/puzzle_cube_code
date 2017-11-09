@@ -163,6 +163,13 @@ for new_r in range(6): # decide where red goes
             position_permutations.append(position_perm)
             opp_position_permutations.append(opp_position_perm)
 
+color_permutations = np.array(color_permutations)
+opp_color_permutations = np.array(opp_color_permutations)
+action_permutations = np.array(action_permutations)
+opp_action_permutations = np.array(opp_action_permutations)
+position_permutations = np.array(position_permutations)
+opp_position_permutations = np.array(opp_position_permutations)
+
 def swap_colors_1(bc, i):
     idx = np.indices(bc._cube_array.shape)[0]
     bc._cube_array = bc._cube_array[idx, position_permutations[i][np.newaxis]]
@@ -176,137 +183,213 @@ def swap_colors_2(bc, i):
     bit_array = bit_array[idx, pos_perm, col_perm]
     bc.load_bit_array(bit_array)
 
-print("color_permutations = \\")
-pprint(np.array(color_permutations))
-print()
+if __name__ == '__main__':
+    print("color_permutations = \\")
+    pprint(np.array(color_permutations))
+    print()
 
-print("position_permutations = \\")
-np.set_printoptions(threshold=np.inf) # allows one to see the whole array even if it is big
-pprint(np.array(position_permutations))
-print()
+    print("position_permutations = \\")
+    np.set_printoptions(threshold=np.inf) # allows one to see the whole array even if it is big
+    pprint(np.array(position_permutations))
+    print()
 
-print("opp_action_permutations = \\")
-pprint(np.array(opp_action_permutations))
+    print("opp_action_permutations = \\")
+    pprint(np.array(opp_action_permutations))
+    print()
 
-# test opposites
-for i in range(48):
-    bc0 = BatchCube()
-    bc0.randomize(100)
-    bc = bc0.copy()
-    
-    bc._cube_array[0] = bc._cube_array[0][position_permutations[i]]
-    bc._cube_array[0] = bc._cube_array[0][opp_position_permutations[i]]
-    assert bc == bc0
+    print("action_permutations = \\")
+    pprint(np.array(action_permutations))
 
-    bc._cube_array[0] = color_permutations[i][bc._cube_array[0]]
-    bc._cube_array[0] = opp_color_permutations[i][bc._cube_array[0]]
-    assert bc == bc0
+    # test opposites
+    for i in range(48):
+        bc0 = BatchCube()
+        bc0.randomize(100)
+        bc = bc0.copy()
+        
+        bc._cube_array[0] = bc._cube_array[0][position_permutations[i]]
+        bc._cube_array[0] = bc._cube_array[0][opp_position_permutations[i]]
+        assert bc == bc0
 
-# test solved cube under permuations
-for i in range(48):
-    bc0 = BatchCube()
-    bc = bc0.copy()
-    
-    bc._cube_array[0] = bc._cube_array[0][position_permutations[i]]
-    bc._cube_array[0] = opp_color_permutations[i][bc._cube_array[0]]
-    assert bc == bc0
+        bc._cube_array[0] = color_permutations[i][bc._cube_array[0]]
+        bc._cube_array[0] = opp_color_permutations[i][bc._cube_array[0]]
+        assert bc == bc0
 
-# test solved cube under permuations (bit array)
-for i in range(48):
-    bc0 = BatchCube()
-    bc = bc0.copy()
-    
-    bit_array = bc.bit_array()
-    idx = np.indices(bc.bit_array().shape)[0]
-    pos_perm = position_permutations[i][np.newaxis,:,np.newaxis]
-    col_perm = color_permutations[i][np.newaxis, np.newaxis]
-    bit_array = bit_array[idx, pos_perm, col_perm]
-    bc.load_bit_array(bit_array)
-    assert bc == bc0
+        policy0 = np.random.uniform(size=12)
+        policy1 = policy0.copy()
+        policy1 = policy1[action_permutations[i]]
+        policy1 = policy1[opp_action_permutations[i]]
+        assert np.array_equal(policy0, policy1)
 
-# test swap functions
-for i in range(48):
-    bc1 = BatchCube(10)
-    bc1.randomize(100)
-    bc2 = bc1.copy()
+    # test solved cube under permuations
+    for i in range(48):
+        bc0 = BatchCube()
+        bc = bc0.copy()
+        
+        bc._cube_array[0] = bc._cube_array[0][position_permutations[i]]
+        bc._cube_array[0] = opp_color_permutations[i][bc._cube_array[0]]
+        assert bc == bc0
 
-    swap_colors_1(bc1, i)
-    swap_colors_2(bc2, i)
+    # test solved cube under permuations (bit array)
+    for i in range(48):
+        bc0 = BatchCube()
+        bc = bc0.copy()
+        
+        bit_array = bc.bit_array()
+        idx = np.indices(bc.bit_array().shape)[0]
+        pos_perm = position_permutations[i][np.newaxis,:,np.newaxis]
+        col_perm = color_permutations[i][np.newaxis, np.newaxis]
+        bit_array = bit_array[idx, pos_perm, col_perm]
+        bc.load_bit_array(bit_array)
+        assert bc == bc0
 
-    assert bc1 == bc2, "\n" + str(bc1) + "\n" + str(bc2)
+    # test swap functions
+    for i in range(48):
+        bc1 = BatchCube(10)
+        bc1.randomize(100)
+        bc2 = bc1.copy()
 
-"""
-# test action permuations
-for i in range(48):
-    for a in range(12):
-        bc1 = BatchCube(1)
+        swap_colors_1(bc1, i)
+        swap_colors_2(bc2, i)
+
+        assert bc1 == bc2, "\n" + str(bc1) + "\n" + str(bc2)
+
+    """
+    # test action permuations
+    for i in range(48):
+        for a in range(12):
+            bc1 = BatchCube(1)
+            bc1.randomize(100)
+            bc2 = bc1.copy()
+            
+            # b1: switch colors and then preform switched action
+            swap_colors_2(bc1, i)
+            new_a = opp_action_permutations[i][a]
+            bc1.step(new_a)
+
+            # preform action and then swap colors
+            bc2.step(a)
+            swap_colors_2(bc2, i)
+
+            # then do new action
+            assert bc1 == bc2, "\n" + str(bc1) + "\n" + str(bc2)
+    """
+    # test action permuations
+    for i in range(48):
+        bc1 = BatchCube(12)
         bc1.randomize(100)
         bc2 = bc1.copy()
         
         # b1: switch colors and then preform switched action
         swap_colors_2(bc1, i)
-        new_a = opp_action_permutations[i][a]
-        bc1.step(new_a)
+        bc1.step(opp_action_permutations[i])
 
         # preform action and then swap colors
-        bc2.step(a)
+        bc2.step(np.arange(12))
         swap_colors_2(bc2, i)
 
         # then do new action
         assert bc1 == bc2, "\n" + str(bc1) + "\n" + str(bc2)
-"""
-# test action permuations
-for i in range(48):
-    bc1 = BatchCube(12)
-    bc1.randomize(100)
-    bc2 = bc1.copy()
-    
-    # b1: switch colors and then preform switched action
-    swap_colors_2(bc1, i)
-    bc1.step(opp_action_permutations[i])
 
-    # preform action and then swap colors
-    bc2.step(np.arange(12))
-    swap_colors_2(bc2, i)
-
-    # then do new action
-    assert bc1 == bc2, "\n" + str(bc1) + "\n" + str(bc2)
-
-# test opposite action permuations
-for i in range(48):
-    bc1 = BatchCube(12)
-    bc1.randomize(100)
-    bc2 = bc1.copy()
-    
-    # b1: switch colors and then preform switched action
-    swap_colors_2(bc1, i)
-    bc1.step(np.arange(12))
-
-    # preform action and then swap colors
-    bc2.step(action_permutations[i])
-    swap_colors_2(bc2, i)
-
-    # then do new action
-    assert bc1 == bc2, "\n" + str(bc1) + "\n" + str(bc2)
-
-# test rearranging policy
-for i in range(48):
-    for _ in range(10):
-        bc1 = BatchCube(1)
+    # test opposite action permuations
+    for i in range(48):
+        bc1 = BatchCube(12)
         bc1.randomize(100)
         bc2 = bc1.copy()
         
-        # b1: find policy on swapped side
+        # b1: switch colors and then preform switched action
         swap_colors_2(bc1, i)
-        policy = np.random.uniform(size=12)
-        bc1.step(np.argmax(policy))
+        bc1.step(np.arange(12))
 
-        # b2: convert policy back to normal side
-        bc2.step(np.argmax(policy[opp_action_permutations[i]]))
+        # preform action and then swap colors
+        bc2.step(action_permutations[i])
         swap_colors_2(bc2, i)
 
         # then do new action
-        assert bc1 == bc2
+        assert bc1 == bc2, "\n" + str(bc1) + "\n" + str(bc2)
+
+    # test rearranging policy
+    for i in range(48):
+        for _ in range(10):
+            bc1 = BatchCube(1)
+            bc1.randomize(100)
+            bc2 = bc1.copy()
+            
+            # b1: find policy on swapped side
+            swap_colors_2(bc1, i)
+            policy = np.random.uniform(size=12)
+            bc1.step(np.argmax(policy))
+
+            # b2: convert policy back to normal side
+            bc2.step(np.argmax(policy[opp_action_permutations[i]]))
+            swap_colors_2(bc2, i)
+
+            # then do new action
+            assert bc1 == bc2
+
+
+    # test augmenting data set
+    size = 100
+    bc1 = BatchCube(size)
+    bc1.randomize(100)
+    bc2 = bc1.copy()
+
+    # find policy and value on original rotation
+    inputs = bc1.bit_array()
+    policies = original_policies = np.random.uniform(size=(size, 12))
+    values = original_values = np.random.uniform(size=size)
+    
+    bc1.step(np.argmax(policies, axis=1))
+
+    # convert state, policies, and values to all rotations
+    inputs = np.array(inputs).reshape((-1, 54, 6))
+    sample_size = inputs.shape[0]
+
+    sample_idx = np.arange(sample_size)[np.newaxis, :, np.newaxis, np.newaxis]
+    pos_perm = position_permutations[:, np.newaxis, :, np.newaxis]
+    col_perm = color_permutations[:, np.newaxis, np.newaxis, :]
+    inputs = inputs[sample_idx, pos_perm, col_perm]
+    inputs = inputs.reshape((-1, 54, 6))
+
+    policies = np.array(policies).reshape((-1, 12))
+    sample_idx = np.arange(sample_size)[np.newaxis, :, np.newaxis]
+    action_perm = action_permutations[:, np.newaxis, :]
+    policies = policies[sample_idx, action_perm]
+    policies = policies.reshape((-1, 12))
+
+    values = np.array(values).reshape((-1, ))
+    values = np.tile(values, 48)
+
+    # test that this is the right permuation
+    assert len(inputs) == len(policies)
+    assert len(inputs) == len(policies)
+
+    inputs = inputs.reshape(48, -1, 54, 6)
+    policies = policies.reshape(48, -1, 12)
+    values = values.reshape(48, -1)
+    
+    for rot in range(48):
+        i2 = inputs[rot]
+        p2 = policies[rot]
+        v2 = values[rot]
+        
+        assert v2.shape == original_values.shape
+        assert np.array_equal(v2, original_values)
+        
+        sample_idx = np.arange(len(p2))[:, np.newaxis]
+        p1 = p2[sample_idx, opp_action_permutations[rot][np.newaxis]]
+        assert p1.shape == original_policies.shape, str(rot) + str(p1.shape) + " " + str(original_policies.shape)
+        assert np.array_equal(p1, original_policies), str(rot) + "\n" + str(p1) + "\n" + str(original_policies)
+        
+        bc2_ = BatchCube()
+        bc2_.load_bit_array(i2)
+        bc2_.step(np.argmax(p2, axis=1))
+
+        bc1_ = bc1.copy()
+        swap_colors_2(bc1_, rot)
+        assert bc1_ == bc2_, "\n" + str(bc1_) + "\n" + str(bc2_)
+
+
+
 
 
 
