@@ -109,19 +109,24 @@ class TrainingAgent():
         """
         import numpy as np
         from keras.models import Model
-        from keras.layers import Conv3D, Input, BatchNormalization, Dense, Flatten, Activation, add
+        from keras.layers import Conv3D, Input, BatchNormalization, Dense, Flatten, Activation, add, Lambda
         from keras.optimizers import Adam
         from keras.losses import categorical_crossentropy
         from keras.regularizers import l2
 
         state_input = Input(shape=(6, 5, 5, 5), name='state_input')
         
+        mask = np.zeros((5, 5, 5))
+        mask[x3d, y3d, z3d] = 1
+        mask = mask[np.newaxis]
+
         conv = Conv3D(32, kernel_size=3, 
                           strides=(1, 1, 1), 
                           padding='same', 
                           data_format="channels_first",
                           kernel_regularizer=l2(0.001), 
                           bias_regularizer=l2(0.001))(state_input)
+        conv = Lambda(lambda x: x * mask)(conv)
         batch = BatchNormalization(axis=1)(conv)
         end_of_block = Activation('relu')(batch)
 
@@ -132,6 +137,7 @@ class TrainingAgent():
                           data_format="channels_first",
                           kernel_regularizer=l2(0.001), 
                           bias_regularizer=l2(0.001))(end_of_block)
+        conv = Lambda(lambda x: x * mask)(conv)
         batch = BatchNormalization(axis=1)(conv)
         relu = Activation('relu')(batch)
         conv = Conv3D(32, kernel_size=3, 
@@ -140,6 +146,7 @@ class TrainingAgent():
                           data_format="channels_first",
                           kernel_regularizer=l2(0.001), 
                           bias_regularizer=l2(0.001))(relu)
+        conv = Lambda(lambda x: x * mask)(conv)
         batch = BatchNormalization(axis=1)(conv)
         conn = add([batch, end_of_block])
         end_of_block = Activation('relu')(conn)
@@ -151,6 +158,7 @@ class TrainingAgent():
                           data_format="channels_first",
                           kernel_regularizer=l2(0.001), 
                           bias_regularizer=l2(0.001))(end_of_block)
+        conv = Lambda(lambda x: x * mask)(conv)
         batch = BatchNormalization(axis=1)(conv)
         relu = Activation('relu')(batch)
         conv = Conv3D(32, kernel_size=3, 
@@ -159,6 +167,7 @@ class TrainingAgent():
                           data_format="channels_first",
                           kernel_regularizer=l2(0.001), 
                           bias_regularizer=l2(0.001))(relu)
+        conv = Lambda(lambda x: x * mask)(conv)
         batch = BatchNormalization(axis=1)(conv)
         conn = add([batch, end_of_block])
         end_of_block = Activation('relu')(conn)
@@ -170,6 +179,7 @@ class TrainingAgent():
                           data_format="channels_first",
                           kernel_regularizer=l2(0.001), 
                           bias_regularizer=l2(0.001))(end_of_block)
+        conv = Lambda(lambda x: x * mask)(conv)
         batch = BatchNormalization(axis=1)(conv)
         relu = Activation('relu')(batch)
         flat = Flatten()(relu)
@@ -188,6 +198,7 @@ class TrainingAgent():
                           data_format="channels_first",
                           kernel_regularizer=l2(0.001), 
                           bias_regularizer=l2(0.001))(end_of_block)
+        conv = Lambda(lambda x: x * mask)(conv)
         batch = BatchNormalization(axis=1)(conv)
         relu = Activation('relu')(batch)
         flat = Flatten()(relu)
