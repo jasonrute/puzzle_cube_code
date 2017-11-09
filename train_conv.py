@@ -565,11 +565,10 @@ class TrainingAgent():
         file_name = "data_{}_gen{:03}.h5".format(VERSIONS[0], self.generation)
         path = "./save/" + file_name
 
-        # process arrays now to save time during training
-        inputs = np.array(self.training_data_states).reshape((-1, 54, 6))
-        inputs = np.rollaxis(inputs, 2, 1).reshape(-1, 6*6, 3, 3)
-        outputs_policy = np.array(self.training_data_policies)
-        outputs_value = np.array(self.training_data_values)
+        inputs, outputs_policy, outputs_value = \
+            self.process_training_data(self.training_data_states,
+                                                   self.training_data_policies,
+                                                   self.training_data_values)
 
         with h5py.File(path, 'w') as hf:
             hf.create_dataset("inputs",  data=inputs)
