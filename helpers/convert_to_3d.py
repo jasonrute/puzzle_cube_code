@@ -77,6 +77,32 @@ for i in range(54):
 
 x,y,z = np.array(x), np.array(y), np.array(z) 
 
+# Find neighbors by direction:
+# - number of directions is 27 = 3x3x3
+
+square_indices = np.full((6, 6, 6), -1, dtype=int) # -1 means not a square, dimension 6 = 5 + 1 for wrapping
+square_indices[x, y, z] = np.arange(54)
+
+neighbors = []
+for pos in range(54):
+    x0 = x[pos]
+    y0 = y[pos]
+    z0 = z[pos]
+
+    my_neighbors = []
+    for dx in [-1, 0, 1]:
+        for dy in [-1, 0, 1]:
+            for dz in [-1, 0, 1]:
+                x1 = x0 + dx
+                y1 = y0 + dy
+                z1 = z0 + dz
+
+                my_neighbors.append(square_indices[x1, y1, z1])
+
+    neighbors.append(my_neighbors)
+
+neighbors = np.array(neighbors)
+
 def bc_to_3d_array(bc):
     array_3d = np.full((len(bc), 5, 5, 5), -1, dtype=int)
     idx = np.indices(bc._cube_array.shape)[0]
@@ -95,6 +121,8 @@ def bc_to_3d_bit_array(bc):
     
     return bit_array_3d
 
+
+
 if __name__ == '__main__':
     print("x3d = \\")
     pprint(x)
@@ -105,7 +133,13 @@ if __name__ == '__main__':
     print("z3d = \\")
     pprint(z)
     print()
-    
+
+    np.set_printoptions(threshold=np.inf) # allows one to see the whole array even if it is big
+    print("neighbors = \\")
+    pprint(neighbors)
+    print()
+    np.set_printoptions(threshold=1000) # allows one to see the whole array even if it is big
+
     bc = BatchCube(1)
     grid = np.full((5, 5, 5), -1, dtype=int)
     grid[x, y, z] = bc._cube_array[0]
@@ -136,3 +170,5 @@ if __name__ == '__main__':
 
     bc = BatchCube(1)
     pprint(bc_to_3d_bit_array(bc).astype(int))
+
+
