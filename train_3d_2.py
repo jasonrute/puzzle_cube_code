@@ -673,6 +673,35 @@ class TrainingAgent():
 
         print("saved stats:", "'" + path + "'")
 
+    def process_training_data(self, inputs, policies, values):
+        """
+        Convert training data to arrays.  
+        Augment with symmetric rotations.  
+        Reshape to fit model input.
+        """
+        from batch_cube import position_permutations, color_permutations, action_permutations
+        
+        inputs = np.array(inputs).reshape((-1, 54, 6))
+        sample_size = inputs.shape[0]
+
+        # augement with all color rotations
+        sample_idx = np.arange(sample_size)[np.newaxis, :, np.newaxis, np.newaxis]
+        pos_perm = position_permutations[:, np.newaxis, :, np.newaxis]
+        col_perm = color_permutations[:, np.newaxis, np.newaxis, :]
+        inputs = inputs[sample_idx, pos_perm, col_perm]
+        inputs = inputs.reshape((-1, 54, 6))
+
+        policies = np.array(policies)
+        sample_idx = np.arange(sample_size)[np.newaxis, :, np.newaxis]
+        action_perm = action_permutations[:, np.newaxis, :]
+        policies = policies[sample_idx, action_perm]
+        policies = policies.reshape((-1, 12))
+        
+        values = np.array(values).reshape((-1, ))
+        values = np.tile(values, 48)
+
+        return inputs, policies, values
+
     def save_training_data(self):
         # save training_data
         import h5py
@@ -680,13 +709,10 @@ class TrainingAgent():
         file_name = "data_{}_gen{:03}.h5".format(VERSIONS[0], self.generation)
         path = "./save/" + file_name
 
-        # process arrays now to save time during training
-        input_array = np.array(self.training_data_states).reshape((-1, 54, 6))
-        #input_array = np.rollaxis(input_array, 2, 1)
-        inputs =  input_array
-
-        outputs_policy = np.array(self.training_data_policies)
-        outputs_value = np.array(self.training_data_values)
+        inputs, outputs_policy, outputs_value = \
+            self.process_training_data(self.training_data_states,
+                                       self.training_data_policies,
+                                       self.training_data_values)
 
         with h5py.File(path, 'w') as hf:
             hf.create_dataset("inputs",  data=inputs)
