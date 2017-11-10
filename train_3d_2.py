@@ -340,6 +340,8 @@ class TrainingAgent():
 
     def build_model_policy_value(self, model):
         cache = {}
+        from tensorflow.python.keras import backend as K
+        get_output = K.function([model.input, K.learning_phase()], [model.output[0], model.output[1]])
         def model_policy_value(input_array):
             key = input_array.tobytes()
             if key in cache:
@@ -349,6 +351,7 @@ class TrainingAgent():
             #input_array = np.rollaxis(input_array, 2, 1)
             
             policy, value = model.predict(input_array)
+            #policy, value = get_output([input_array, 0])
             policy = policy.reshape((self.action_count,))
             value = value[0, 0]
 
