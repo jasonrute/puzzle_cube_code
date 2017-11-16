@@ -15,7 +15,6 @@ When it is outputed to a bit array (for the NN) it is stored as ? x 54 x 6
 """
 
 import numpy as np
-import pycuber as pc
 
 basic_moves = ["L", "L'", "R", "R'", "U", "U'", "D", "D'", "F", "F'", "B", "B'"]
 
@@ -28,9 +27,22 @@ solved_cube_list = np.array([0]*9 + [1]*9 + [2]*9 + [3]*9 + [4]*9 + [5]*9)
 solved_cube_bit_array = eye6[np.newaxis, solved_cube_list]
 
 pc_indices = [58, 61, 64, 95, 98, 101, 132, 135, 138, 10, 13, 16, 29, 32, 35, 48, 51, 54, 67, 70, 73, 104, 107, 110, 141, 144, 147, 178, 181, 184, 197, 200, 203, 216, 219, 222, 76, 79, 82, 113, 116, 119, 150, 153, 156, 85, 88, 91, 122, 125, 128, 159, 162, 165]
+str_order = [pc_indices.index(i) for i in sorted(pc_indices)]
+
+str_format = \
+"""         [{}][{}][{}]
+         [{}][{}][{}]
+         [{}][{}][{}]
+[{}][{}][{}][{}][{}][{}][{}][{}][{}][{}][{}][{}]
+[{}][{}][{}][{}][{}][{}][{}][{}][{}][{}][{}][{}]
+[{}][{}][{}][{}][{}][{}][{}][{}][{}][{}][{}][{}]
+         [{}][{}][{}]
+         [{}][{}][{}]
+         [{}][{}][{}]"""
 
 colors = ['r', 'y', 'g', 'w', 'o', 'b']
 color_dict = {'r': 0, 'y': 1, 'g': 2, 'w': 3, 'o': 4, 'b': 5}
+color_dict2 = {0: 'r', 1: 'y', 2: 'g', 3: 'w', 4: 'o', 5: 'b'}
 
 # Here forward_action_array[a, n] is the position where square n moves to under action number a
 forward_action_array =\
@@ -597,6 +609,8 @@ class BatchCube():
         """
         Returns a list of PyCuber Cubes
         """
+        import pycuber as pc # will raise error if pycuber not installed
+
         # convert to number representation
         return [pc.Cube(pc.helpers.array_to_cubies([str(int(c)) for c in color_list])) 
                 for color_list in self._cube_array]
@@ -606,7 +620,8 @@ class BatchCube():
         Takes in a list of PyCuber Cubes and converts them to an array.
         It overwrites the array in the object.
         """
-        
+        import pycuber as pc # will raise error if pycuber not installed
+
         # The only good way I know to do this is to first convert the pc.Cube object
         # to a string and read off the values.
         
@@ -633,7 +648,12 @@ class BatchCube():
         self._sample_index = np.indices(self._cube_array.shape)[0]
 
     def __str__(self):
-        return "".join(str(c) for c in self.to_pycuber())
+        strs = []
+        for cube in self._cube_array:
+            strs.append(str_format.format(*(color_dict2[c] for c in cube[str_order])))
+        
+        return "\n".join(strs)
+        #return "".join(str(c) for c in self.to_pycuber())
 
     def __eq__(self, other):
         return np.array_equal(self._cube_array, other._cube_array)
@@ -647,11 +667,12 @@ class BatchCube():
 
 
 if __name__ == '__main__':
+    import pycuber as pc
+
     # blank_cube and export
     bc = BatchCube()
     for c in bc.to_pycuber():
         print(c)
-    
     
     # import blank_cube and export it
     bc1 = BatchCube()
@@ -853,6 +874,11 @@ if __name__ == '__main__':
     bc1.from_pycuber(py_cuber_list)
     print(bc1)
     assert bc == bc1
+
+    # test __str__
+    bc = BatchCube(10)
+    bc.randomize(100)
+    assert str(bc) + "\n" == "".join(str(c) for c in bc.to_pycuber())
 
     print("All tests successful!")
 
