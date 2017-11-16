@@ -175,13 +175,13 @@ class TrainingAgent():
         self.prebuilt_transposition_table = None # built later
 
         # Training parameters (fixed)
-        self.games_per_generation = 100
+        self.games_per_generation = 1000
         self.starting_distance = 1
         self.min_distance = 1
         self.win_rate_target = .5
         self.max_game_length = 100
         self.prev_generations_used_for_training = 10
-        self.training_sample_size = 2024
+        self.training_sample_size = 2024 * 64
         self.games_per_evaluation = 100
 
         # Training parameters preserved between generations
