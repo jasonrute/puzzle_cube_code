@@ -722,6 +722,46 @@ class TrainingAgent():
 
         print("saved data:", "'" + path + "'")
 
+    def generate_data_self_play(self):
+        self.reset_self_play()
+
+        for game in range(self.games_per_generation):
+            print("\nGame {}/{}".format(game, self.games_per_generation))
+            self.play_game(self.best_model)
+
+    def evaluate_and_choose_best_model(self):
+        self.reset_self_play()
+
+        best_model_wins = 0
+        checkpoint_model_wins = 0
+        ties = 0
+
+        for game in range(self.games_per_evaluation):
+            print("\nEvaluation Game {}/{}".format(game, self.games_per_evaluation))
+            print("\nBest model")
+            state, distance, win1 = self.play_game(self.best_model, state=None, distance=None, evaluation_game=True)
+
+            print("\nCheckpoint model")
+            _, _, win2 = self.play_game(self.checkpoint_model, state=state, distance=distance, evaluation_game=True)
+            
+            if win1 > win2:
+                best_model_wins += 1
+            elif win1 < win2:
+                checkpoint_model_wins += 1
+            else:
+                ties += 1
+
+        print("\nEvaluation results (win/lose/tie)")
+        print("Best model      : {:2} / {:2} / {:2}".format(best_model_wins, checkpoint_model_wins, ties))
+        print("Checkpoint model: {:2} / {:2} / {:2}".format(checkpoint_model_wins, best_model_wins, ties))
+        
+        if checkpoint_model_wins - best_model_wins > 5:
+            print("\nCheckpoint model is better.")
+            print("\nSave and set as best model...")
+            self.save_and_set_best_model()
+        else:
+            print("\nCurrent best model is still the best.")
+
 def main():
     agent = TrainingAgent()
 
@@ -737,11 +777,7 @@ def main():
     print("\nBegin training loop...")
     while True:
         print("\nBegin self-play data generation...")
-        agent.reset_self_play()
-
-        for game in range(agent.games_per_generation):
-            print("\nGame {}/{}".format(game, agent.games_per_generation))
-            agent.play_game(agent.best_model)
+        agent.generate_data_self_play()
 
         print("\nSave stats...")
         agent.save_training_stats()
@@ -758,37 +794,7 @@ def main():
         agent.save_checkpoint_model()   
 
         print("\nBegin evaluation...")
-        agent.reset_self_play()
-
-        best_model_wins = 0
-        checkpoint_model_wins = 0
-        ties = 0
-
-        for game in range(agent.games_per_evaluation):
-            print("\nEvaluation Game {}/{}".format(game, agent.games_per_evaluation))
-            print("\nBest model")
-            state, distance, win1 = agent.play_game(agent.best_model, state=None, distance=None, evaluation_game=True)
-
-            print("\nCheckpoint model")
-            _, _, win2 = agent.play_game(agent.checkpoint_model, state=state, distance=distance, evaluation_game=True)
-            
-            if win1 > win2:
-                best_model_wins += 1
-            elif win1 < win2:
-                checkpoint_model_wins += 1
-            else:
-                ties += 1
-
-        print("\nEvaluation results (win/lose/tie)")
-        print("Best model      : {:2} / {:2} / {:2}".format(best_model_wins, checkpoint_model_wins, ties))
-        print("Checkpoint model: {:2} / {:2} / {:2}".format(checkpoint_model_wins, best_model_wins, ties))
-        
-        if checkpoint_model_wins - best_model_wins > 5:
-            print("\nCheckpoint model is better.")
-            print("\nSave and set as best model...")
-            agent.save_and_set_best_model()
-        else:
-            print("\nCurrent best model is still the best.")
+        agent.evaluate_and_choose_best_model()
 
 if __name__ == '__main__':
     try:
