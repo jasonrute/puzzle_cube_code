@@ -361,7 +361,7 @@ if __name__ == '__main__':
 
     # test that this is the right permuation
     assert len(inputs) == len(policies)
-    assert len(inputs) == len(policies)
+    assert len(inputs) == len(values)
 
     inputs = inputs.reshape(48, -1, 54, 6)
     policies = policies.reshape(48, -1, 12)
