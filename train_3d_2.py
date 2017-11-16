@@ -432,7 +432,7 @@ class TrainingAgent():
             else:
                 print("no best model found with version {}".format(version)) 
 
-        print("best generation:", self.generation)
+        print("best generation:", self.best_generation)
 
     def save_checkpoint_model(self):
         file_name = "checkpoint_model_{}_gen{:03}.h5".format(VERSIONS[0], self.generation)
@@ -735,7 +735,7 @@ def main():
 
     print("\nLoad models (if any)...")
     agent.load_models()
-
+    
     print("\nBegin training loop...")
     while True:
         print("\nBegin self-play data generation...")
@@ -750,6 +750,8 @@ def main():
 
         print("\nSave data...")
         agent.save_training_data()
+
+        agent.generation += 1
 
         print("\nTrain model...")
         agent.train_model()
@@ -789,8 +791,6 @@ def main():
             agent.save_and_set_best_model()
         else:
             print("\nCurrent best model is still the best.")
-
-        agent.generation += 1
 
 if __name__ == '__main__':
     try:
