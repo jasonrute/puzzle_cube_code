@@ -16,7 +16,7 @@ from datetime import datetime
 from mcts_nn_cube import State, MCTSAgent
 
 # this keeps track of the training runs, including the older versions that we are extending
-VERSIONS = ["v0.8"]
+VERSIONS = ["v0.9.dev"]
 
 # memory management
 MY_PROCESS = psutil.Process(os.getpid())
@@ -157,13 +157,11 @@ class TrainingAgent():
     This agent handles all the details of the training.
     """
     def __init__(self):
+        import models 
+
         # Model (NN) parameters (fixed)
-        self.state_dim = (6*54, )
-        self.action_count = 12
-        self.checkpoint_model = None # model used for training (built later)
-        self.best_model = None # model used for data generation (built later)
-        self.checkpoint_policy_value = None # function used for training (built later)
-        self.best_policy_value = None # function used for data generation (built later)
+        self.checkpoint_model = models.ConvModel() # this doesn't build and/or load the model yet
+        self.best_model = models.ConvModel()       # this doesn't build and/or load the model yet
         self.learning_rate = .001
 
         # MCTS parameters (fixed)
@@ -175,14 +173,14 @@ class TrainingAgent():
         self.prebuilt_transposition_table = None # built later
 
         # Training parameters (fixed)
-        self.games_per_generation = 1000
+        self.games_per_generation = 2 # CHANGE BACK LATER 1000
         self.starting_distance = 1
         self.min_distance = 1
         self.win_rate_target = .5
         self.max_game_length = 100
         self.prev_generations_used_for_training = 10
-        self.training_sample_size = 2024 * 64
-        self.games_per_evaluation = 100
+        self.training_sample_size = 128 # CHANGE BACK LATER 2024 * 64
+        self.games_per_evaluation = 2 # CHANGE BACK LATER 100
 
         # Training parameters preserved between generations
         self.training_distance_level = float(self.starting_distance)
@@ -213,7 +211,7 @@ class TrainingAgent():
         self.training_data_policies = []
         self.training_data_values = []
 
-    def starting_model(self):
+    def __remove_me__starting_model(self):
         """
         Build and return a new neural network using the current model architecture
         """
@@ -340,7 +338,7 @@ class TrainingAgent():
 
         return model
 
-    def build_model_policy_value(self, model, max_cache_size=100000):
+    def __remove_me__build_model_policy_value(self, model, max_cache_size=100000):
         from collections import OrderedDict
         cache = OrderedDict()
         #from tensorflow.python.keras import backend as K
@@ -372,11 +370,8 @@ class TrainingAgent():
         Builds both checkpoint and best model
         May be overwritten later by loaded weights
         """
-        self.checkpoint_model = self.starting_model()
-        self.best_model = self.starting_model()
-
-        self.checkpoint_policy_value = self.build_model_policy_value(self.checkpoint_model)
-        self.best_policy_value = self.build_model_policy_value(self.best_model)
+        self.checkpoint_model.build()
+        self.best_model.build()
 
     def load_transposition_table(self):
         #TODO: Add this.  For now, just use empty table.
@@ -406,8 +401,7 @@ class TrainingAgent():
                 
                 print("checkpoint model found:", "'" + path + "'")
                 print("loading model ...")
-                self.checkpoint_model.load_weights(path)
-                self.checkpoint_policy_value = self.build_model_policy_value(self.checkpoint_model)
+                self.checkpoint_model.load_from_file(path)
 
                 self.generation = int(str_between(path, "_gen", ".h5"))
                 break
@@ -430,8 +424,7 @@ class TrainingAgent():
                 
                 print("best model found:", "'" + path + "'")
                 print("loading model ...")
-                self.best_model.load_weights(path)
-                self.best_policy_value = self.build_model_policy_value(self.best_model)
+                self.best_model.load_from_file(path)
 
                 self.best_generation = int(str_between(path, "_gen", ".h5"))
                 break
@@ -444,17 +437,16 @@ class TrainingAgent():
     def save_checkpoint_model(self):
         file_name = "checkpoint_model_{}_gen{:03}.h5".format(VERSIONS[0], self.generation)
         path = "./save/" + file_name
-        self.checkpoint_model.save_weights(path)
+        self.checkpoint_model.save_to_file(path)
         print("saved model checkpoint:", "'" + path + "'")
 
     def save_and_set_best_model(self):
         file_name = "model_{}_gen{:03}.h5".format(VERSIONS[0], self.generation)
         path = "./save/" + file_name
-        self.checkpoint_model.save_weights(path)
+        self.checkpoint_model.save_to_file(path)
         print("saved model:", "'" + path + "'")
 
-        self.best_model.load_weights(path)
-        self.best_policy_value = self.build_model_policy_value(self.best_model)
+        self.best_model.load_from_file(path)
 
         self.best_generation = self.generation
         self.recent_wins = Counter()
@@ -498,17 +490,17 @@ class TrainingAgent():
         outputs_policy_all = np.concatenate(outputs_policy_list, axis=0)
         outputs_value_all = np.concatenate(outputs_value_list, axis=0)
 
+        inputs_all, outputs_policy_all, outputs_value_all = \
+            self.checkpoint_model.process_training_data(inputs_all, outputs_policy_all, outputs_value_all, augment=True)
+
         n = len(inputs_all)
         sample_idx = np.random.choice(n, size=self.training_sample_size)
         inputs = inputs_all[sample_idx]
         outputs_policy = outputs_policy_all[sample_idx]
         outputs_value = outputs_value_all[sample_idx]
 
-        self.checkpoint_model.fit(x=inputs, 
-                                  y={'policy_output': outputs_policy, 'value_output': outputs_value}, 
-                                  epochs=1, verbose=0)
-
-        self.checkpoint_policy_value = self.build_model_policy_value(self.checkpoint_model)
+        print("training...")
+        self.checkpoint_model.train_on_data([inputs, outputs_policy, outputs_value])
 
     def reset_self_play(self):
         # Training parameters (dynamic)
@@ -531,7 +523,7 @@ class TrainingAgent():
         # set start time
         self.self_play_start = datetime.utcnow() # date and time (utc)
 
-    def play_game(self, model_policy_value, state=None, distance=None, evaluation_game=False):
+    def play_game(self, model, state=None, distance=None, evaluation_game=False):
         if distance is None:
             # choose distance
             lower_dist = int(self.training_distance_level)
@@ -548,7 +540,7 @@ class TrainingAgent():
             while state.done(): 
                 state.reset_and_randomize(distance)
 
-        mcts = MCTSAgent(model_policy_value, 
+        mcts = MCTSAgent(model.function, 
                          state, 
                          max_depth=self.max_depth, 
                          transposition_table=self.prebuilt_transposition_table.copy(),
@@ -682,7 +674,7 @@ class TrainingAgent():
 
         print("saved stats:", "'" + path + "'")
 
-    def process_training_data(self, inputs, policies, values):
+    def __remove_me__process_training_data(self, inputs, policies, values):
         """
         Convert training data to arrays.  
         Augment with symmetric rotations.  
@@ -719,9 +711,9 @@ class TrainingAgent():
         path = "./save/" + file_name
 
         inputs, outputs_policy, outputs_value = \
-            self.process_training_data(self.training_data_states,
-                                       self.training_data_policies,
-                                       self.training_data_values)
+            self.best_model.preprocess_training_data(self.training_data_states,
+                                                  self.training_data_policies,
+                                                  self.training_data_values)
 
         with h5py.File(path, 'w') as hf:
             hf.create_dataset("inputs",  data=inputs)
@@ -729,9 +721,6 @@ class TrainingAgent():
             hf.create_dataset("outputs_value",  data=outputs_value)
 
         print("saved data:", "'" + path + "'")
-
-    def evaluate_model(self):
-        warnings.warn("evaluate_model is not implemented", stacklevel=2)
 
 def main():
     agent = TrainingAgent()
@@ -752,7 +741,7 @@ def main():
 
         for game in range(agent.games_per_generation):
             print("\nGame {}/{}".format(game, agent.games_per_generation))
-            agent.play_game(agent.best_policy_value)
+            agent.play_game(agent.best_model)
 
         print("\nSave stats...")
         agent.save_training_stats()
@@ -778,10 +767,10 @@ def main():
         for game in range(agent.games_per_evaluation):
             print("\nEvaluation Game {}/{}".format(game, agent.games_per_evaluation))
             print("\nBest model")
-            state, distance, win1 = agent.play_game(agent.best_policy_value, state=None, distance=None, evaluation_game=True)
+            state, distance, win1 = agent.play_game(agent.best_model, state=None, distance=None, evaluation_game=True)
 
             print("\nCheckpoint model")
-            _, _, win2 = agent.play_game(agent.checkpoint_policy_value, state=state, distance=distance, evaluation_game=True)
+            _, _, win2 = agent.play_game(agent.checkpoint_model, state=state, distance=distance, evaluation_game=True)
             
             if win1 > win2:
                 best_model_wins += 1

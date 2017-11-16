@@ -2,6 +2,10 @@
 The various models.  These all have a common API (except for __init__ which may have extra
 parameters) and are basically wrappers around the Keras models.
 """
+from collections import OrderedDict
+import numpy as np
+import time
+from batch_cube import position_permutations, color_permutations, action_permutations
 
 def random_rotation_wrapper(model_policy_value):
     def rotationally_randomized_policy_value(input_array):
@@ -18,17 +22,55 @@ def random_rotation_wrapper(model_policy_value):
 
     return rotationally_randomized_policy_value
 
+def randomize_input(input_array):
+    pos_perm = position_permutations[rotation_id][:,np.newaxis]
+    col_perm = color_permutations[rotation_id][np.newaxis]
+    input_array = input_array[pos_perm, col_perm]
+
+    return input_array
+
+def derandomize_policy(policy):
+    return policy[opp_action_permutations[rotation_id]]
+
+def augment_data(inputs, policies, values):
+    from batch_cube import position_permutations, color_permutations, action_permutations
+        
+    inputs = np.array(inputs).reshape((-1, 54, 6))
+    sample_size = inputs.shape[0]
+
+    # augement with all color rotations
+    sample_idx = np.arange(sample_size)[np.newaxis, :, np.newaxis, np.newaxis]
+    pos_perm = position_permutations[:, np.newaxis, :, np.newaxis]
+    col_perm = color_permutations[:, np.newaxis, np.newaxis, :]
+    inputs = inputs[sample_idx, pos_perm, col_perm]
+    inputs = inputs.reshape((-1, 54, 6))
+
+    policies = np.array(policies)
+    sample_idx = np.arange(sample_size)[np.newaxis, :, np.newaxis]
+    action_perm = action_permutations[:, np.newaxis, :]
+    policies = policies[sample_idx, action_perm]
+    policies = policies.reshape((-1, 12))
+    
+    values = np.array(values).reshape((-1, ))
+    values = np.tile(values, 48)
+
+    return inputs, policies, values
 
 class ConvModel(): 
     """
     A residual 2D-convolutional model.
     """   
 
-    def __init__(self):
+    def __init__(self, use_cache=True, max_cache_size=10000, rotationally_randomize=False):
         self.learning_rate = .001
         self._model = None # Built and/or loaded later
         self._run_count = 0 # used for measuring computation timing
         self._time_sum = 0 # used for measuring computation timing
+        self._cache = None
+        self._get_output = None
+        self.use_cache = use_cache
+        self.rotationally_randomize = rotationally_randomize
+        self.max_cache_size = max_cache_size
 
     def build(self):
         """
@@ -134,76 +176,81 @@ class ConvModel():
                       optimizer=Adam(lr=self.learning_rate))
 
         self._model = model
+        self._rebuild_function()
 
-    @static_method
+    @staticmethod
     def process_single_input(input_array):
         input_array = input_array.reshape((-1, 54, 6))
         input_array = np.rollaxis(input_array, 2, 1).reshape(-1, 6*6, 3, 3)
         return input_array
 
-    def function(self, use_cache=True, random_rotation=True):
+    def _rebuild_function(self):
         """
-        Returns the function associated with this network.  (The assumption is that 
-        this will be called after training.)
-        - cache: if True, a hash table is used to cache previous input/output pairs.
+        Rebuilds the function associated with this network.  This is called whenever
+        the network is changed.
         """
         from keras import backend as K
-        cache = {}
-        get_output = K.function([self._model.input, K.learning_phase()], [self._model.output[0], self._model.output[1]])
-        def policy_value_function(input_array):
-            """
-            The function which computes the output to the array
-            """
-            if use_cache:
-                key = input_array.tobytes()
-                if key in cache:
-                    return cache[key]
-            
-            input_array = self.process_single_input(input_array)
-            
-            t1 = time.time()
-            #policy, value = self._model.predict(input_array)
-            policy, value = get_output([input_array, 0])
-            self._run_count += 1
-            self._time_sum = time.time() - t1 
-            
-            policy = policy.reshape((self.action_count,))
-            value = value[0, 0]
+        self._cache = OrderedDict()
+        self._get_output = K.function([self._model.input, K.learning_phase()], [self._model.output[0], self._model.output[1]])
 
-            if use_cache:
-                cache[key] = (policy, value)
-            
-            return policy, value
+    def _raw_function(self, input_array):
+        t1 = time.time()
+        #return self._model.predict(input_array)
+        out = self._get_output([input_array, 0])
+        self._run_count += 1
+        self._time_sum = time.time() - t1 
+        return out
 
-        if random_rotation:
-            policy_value_function = random_rotation_wrapper(policy_value_function)
+    def function(self, input_array):
+        """
+        The function which computes the output to the array
+        """ 
+        if self.rotationally_randomize:
+            rotation_id = np.random.choice(48)
+            randomize_input(input_array, rotation_id)
 
-        return policy_value_function
+        if self.use_cache:
+            key = input_array.tobytes()
+            if key in self._cache:
+                self._cache.move_to_end(key, last=True)
+                return self._cache[key]
+        
+        input_array = self.process_single_input(input_array)
+        policy, value = self._raw_function(input_array)
+        
+        policy = policy.reshape((12,))
+        value = value[0, 0]
+
+        if self.use_cache:
+            self._cache[key] = (policy, value)
+            if len(self._cache) > self.max_cache_size:
+                self._cache.popitem(last=False)
+        
+        if self.rotationally_randomize:
+            policy = derandomize_policy(policy, rotation_id)
+
+        return policy, value
 
     def load_from_file(self, path):
         self._model.load_weights(path)
+        self._rebuild_function()
 
     def save_to_file(self, path):
         self._model.save_weights(path)
     
-    def train_on_data(self, data, sample_):
+    def train_on_data(self, data):
         """
         data: list of inputs, policies, values as arrays (assume already preprocessed for training)
         """
 
-        inputs_all, outputs_policy_all, outputs_value_all = data
-
-        n = len(inputs_all)
-        sample_idx = np.random.choice(n, size=self.training_sample_size)
-        inputs = inputs_all[sample_idx]
-        outputs_policy = outputs_policy_all[sample_idx]
-        outputs_value = outputs_value_all[sample_idx]
+        inputs, outputs_policy, outputs_value = data
 
         self._model.fit(x=inputs, 
                                   y={'policy_output': outputs_policy, 'value_output': outputs_value}, 
                                   epochs=1, verbose=0)
+        self._rebuild_function()
 
-    @static_method
+    @staticmethod
     def augment_data(inputs, policies, values):
         """
         Augment data with all 48 color rotations
@@ -230,10 +277,30 @@ class ConvModel():
 
         return inputs, policies, values
 
-    @static_method
+    @staticmethod
+    def preprocess_training_data(inputs, policies, values):
+        """
+        Convert training data to arrays in preparation for saving.
+        
+        Don't augment, since this takes up too much space and doesn't cost much in time to
+        do it later.
+
+        Also keep the inputs shape as (-1, 54, 6) so that other networks can use the same
+        data.
+        """
+        
+        # convert to arrays
+        inputs = np.array(inputs).reshape((-1, 54, 6))
+        policies = np.array(policies)
+        values = np.array(values).reshape((-1, ))
+
+        return inputs, policies, values
+
+    @staticmethod
     def process_training_data(inputs, policies, values, augment=True):
         """
         Convert training data to arrays.  
+        Augment data
         Reshape to fit model input.
         """
         
