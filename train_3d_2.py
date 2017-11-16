@@ -593,7 +593,9 @@ class TrainingAgent():
 
             # prepare for next state
             counter += 1 
-            if shortest_path < 0 or counter >= self.max_game_length:
+            if shortest_path < 0:
+                print("(DB) no path")
+            if (counter > 1 and shortest_path < 0) or counter >= self.max_game_length:
                 win = False
                 break
             mcts.advance_to_action(action)
