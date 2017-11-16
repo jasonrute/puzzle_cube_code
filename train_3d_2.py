@@ -338,13 +338,15 @@ class TrainingAgent():
 
         return model
 
-    def build_model_policy_value(self, model):
-        cache = {}
+    def build_model_policy_value(self, model, max_cache_size=100000):
+        from collections import OrderedDict
+        cache = OrderedDict()
         from tensorflow.python.keras import backend as K
         get_output = K.function([model.input, K.learning_phase()], [model.output[0], model.output[1]])
         def model_policy_value(input_array):
             key = input_array.tobytes()
             if key in cache:
+                cache.move_to_end(key, last=True)
                 return cache[key]
             
             input_array = input_array.reshape((-1, 54, 6))
@@ -356,6 +358,9 @@ class TrainingAgent():
             value = value[0, 0]
 
             cache[key] = (policy, value)
+            if len(cache) > max_cache_size:
+                cache.popitem(last=False)
+
             return policy, value
 
         return model_policy_value
