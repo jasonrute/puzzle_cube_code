@@ -352,7 +352,7 @@ class TrainingAgent():
             
             policy, value = model.predict(input_array)
             #policy, value = get_output([input_array, 0])
-            policy = policy.reshape((self.action_count,))
+            policy = policy.reshape((12,))
             value = value[0, 0]
 
             cache[key] = (policy, value)
