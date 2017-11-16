@@ -75,7 +75,7 @@ class MCTSNode():
             self.children = [None] * action_count
 
     def upper_confidence_bounds(self):
-        return (self.c_puct * np.sqrt(self.total_visit_counts)) * self.prior_probabilities / (1 + self.visit_counts)
+        return (self.node_value * self.c_puct * np.sqrt(self.total_visit_counts)) * self.prior_probabilities / (1 + self.visit_counts)
 
     def child(self, mcts_agent, action):
         # return node if already indexed
