@@ -773,9 +773,9 @@ class TrainingAgent():
             training_distance_level = float(self.min_distance)
         else:
             lower_dist = upper_dist - 1
-            lower_dist_win_rate = 0. if recent_games[lower_dist] == 0 \
+            lower_dist_win_rate = (.99 * self.win_rate_target) if recent_games[lower_dist] == 0 \
                                     else recent_wins[lower_dist] / recent_games[lower_dist]
-            upper_dist_win_rate = 0. if recent_games[lower_dist+1] == 0 \
+            upper_dist_win_rate = (.99 * self.win_rate_target) if recent_games[lower_dist+1] == 0 \
                                     else recent_wins[lower_dist+1] / recent_games[lower_dist+1]
             # notice that we won't divide by zero hear since upper_dist_win_rate < lower_dist_win_rate
             training_distance_level = lower_dist + (lower_dist_win_rate - self.win_rate_target) / (lower_dist_win_rate - upper_dist_win_rate)
@@ -789,8 +789,8 @@ class TrainingAgent():
         game_id, level, distance, win, data, game_stats, self_play_stats = game_results
         print("\nGame {}/{}".format(game_id, self.games_per_generation))
         lower_dist = int(level)
-        lower_dist_win_rate = 0. if self.recent_games[lower_dist] == 0 else self.recent_wins[lower_dist] / self.recent_games[lower_dist]
-        upper_dist_win_rate = 0. if self.recent_games[lower_dist+1] == 0 else self.recent_wins[lower_dist+1] / self.recent_games[lower_dist+1]
+        lower_dist_win_rate = float('nan') if self.recent_games[lower_dist] == 0 else self.recent_wins[lower_dist] / self.recent_games[lower_dist]
+        upper_dist_win_rate = float('nan') if self.recent_games[lower_dist+1] == 0 else self.recent_wins[lower_dist+1] / self.recent_games[lower_dist+1]
         print("(DB) distance:", distance, 
               "(level: {:.2f} win rates: {}: {:.2f} {}: {:.2f})".format(level, lower_dist, lower_dist_win_rate, lower_dist+1, upper_dist_win_rate))
         if win:
@@ -913,11 +913,11 @@ class TrainingAgent():
             # update data
             # TODO I should be updating data here
             
-            # update win rates and level
-            self.update_win_and_level(distance, win)
-
             # Print details
             self.print_game_stats(game_results)
+            
+            # update win rates and level
+            self.update_win_and_level(distance, win)
 
     def evaluate_and_choose_best_model(self):
         self.reset_self_play()
