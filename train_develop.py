@@ -9,6 +9,7 @@ The training routine has three key phases
 """
 import numpy as np
 from collections import defaultdict, deque, Counter
+from itertools import tee
 import warnings
 import os, psutil # useful for memory management
 from datetime import datetime
@@ -186,6 +187,9 @@ class TrainingAgent():
         self.training_distance_level = float(self.starting_distance)
         self.recent_wins = Counter()
         self.recent_games = Counter()
+        self.checkpoint_training_distance_level = float(self.starting_distance)
+        self.checkpoint_recent_wins = Counter()
+        self.checkpoint_recent_games = Counter()
 
         # Training parameters (dynamic)
         self.game_number = 0
@@ -440,6 +444,14 @@ class TrainingAgent():
         self.checkpoint_model.save_to_file(path)
         print("saved model checkpoint:", "'" + path + "'")
 
+        self.checkpoint_training_distance_level = self.training_distance_level
+        self.checkpoint_recent_wins = Counter()
+        self.checkpoint_recent_games = Counter()
+        # add a few free wins to speed up the convergence
+        for dist in range(int(self.training_distance_level) + 1):
+            self.checkpoint_recent_games[dist] += 1
+            self.checkpoint_recent_wins[dist] += 1
+
     def save_and_set_best_model(self):
         file_name = "model_{}_gen{:03}.h5".format(VERSIONS[0], self.generation)
         path = "./save/" + file_name
@@ -449,8 +461,9 @@ class TrainingAgent():
         self.best_model.load_from_file(path)
 
         self.best_generation = self.generation
-        self.recent_wins = Counter()
-        self.recent_games = Counter()
+        self.training_distance_level = self.checkpoint_training_distance_level
+        self.recent_wins = self.checkpoint_recent_wins
+        self.recent_games = self.checkpoint_recent_games
 
     def train_model(self):
         import os
@@ -523,7 +536,7 @@ class TrainingAgent():
         # set start time
         self.self_play_start = datetime.utcnow() # date and time (utc)
 
-    def play_game(self, model, state=None, distance=None, evaluation_game=False):
+    def __remove_me__play_game(self, model, state=None, distance=None, evaluation_game=False):
         if distance is None:
             # choose distance
             lower_dist = int(self.training_distance_level)
@@ -722,34 +735,228 @@ class TrainingAgent():
 
         print("saved data:", "'" + path + "'")
 
+    @staticmethod
+    def random_state(distance):
+        state = State()
+        while state.done(): 
+            state.reset_and_randomize(distance)
+        return state
+
+    @staticmethod
+    def random_distance(distance_level):
+        lower_dist = int(distance_level)
+        prob_of_increase = distance_level - lower_dist
+        distance = lower_dist + np.random.choice(2, p=[1-prob_of_increase, prob_of_increase])
+        return distance
+
+    def update_win_and_level(self, distance, win, checkpoint=False):
+        if checkpoint:
+            training_distance_level = self.checkpoint_training_distance_level
+            recent_wins = self.checkpoint_recent_wins
+            recent_games = self.checkpoint_recent_games
+        else:
+            training_distance_level = self.training_distance_level
+            recent_wins = self.recent_wins
+            recent_games = self.recent_games
+
+        # update wins/loses
+        recent_wins[distance] += win
+        recent_games[distance] += 1
+
+        # update difficulty
+        upper_dist = 0
+        while True:
+            upper_dist += 1
+            if recent_wins[upper_dist] <= self.win_rate_target * recent_games[upper_dist]:
+                break
+        if upper_dist <= self.min_distance:
+            training_distance_level = float(self.min_distance)
+        else:
+            lower_dist = upper_dist - 1
+            lower_dist_win_rate = 0. if recent_games[lower_dist] == 0 \
+                                    else recent_wins[lower_dist] / recent_games[lower_dist]
+            upper_dist_win_rate = 0. if recent_games[lower_dist+1] == 0 \
+                                    else recent_wins[lower_dist+1] / recent_games[lower_dist+1]
+            # notice that we won't divide by zero hear since upper_dist_win_rate < lower_dist_win_rate
+            training_distance_level = lower_dist + (lower_dist_win_rate - self.win_rate_target) / (lower_dist_win_rate - upper_dist_win_rate)
+
+        if checkpoint:
+            self.checkpoint_training_distance_level = training_distance_level
+        else:
+            self.training_distance_level = training_distance_level
+
+    def print_game_stats(self, game_results):
+        game_id, level, distance, win, data, game_stats, self_play_stats = game_results
+        print("\nGame {}/{}".format(game_id, self.games_per_generation))
+        lower_dist = int(level)
+        lower_dist_win_rate = 0. if self.recent_games[lower_dist] == 0 else self.recent_wins[lower_dist] / self.recent_games[lower_dist]
+        upper_dist_win_rate = 0. if self.recent_games[lower_dist+1] == 0 else self.recent_wins[lower_dist+1] / self.recent_games[lower_dist+1]
+        print("(DB) distance:", distance, 
+              "(level: {:.2f} win rates: {}: {:.2f} {}: {:.2f})".format(level, lower_dist, lower_dist_win_rate, lower_dist+1, upper_dist_win_rate))
+        if win:
+            print("(DB)", "win")
+        else:
+            print("(DB)", "lose")
+
+    def print_eval_game_stats(self, game_results1, game_results2, current_scores):
+        game_id1, level1, distance1, win1, data1, game_stats1, self_play_stats1 = game_results1
+        game_id2, level2, distance2, win2, data2, game_stats2, self_play_stats2 = game_results2
+        assert game_id1 == game_id2
+        assert distance1 == distance2
+        print("\nEvaluation Game {}/{}".format(game_id1, self.games_per_evaluation))
+        print("(DB) distance:", distance1)
+        print("(DB) Best model:   ", "win " if win1 else "lose", "level:", self.training_distance_level)
+        print("(DB) Current model:", "win " if win2 else "lose", "level:", self.checkpoint_training_distance_level)
+
+    def play_game(self, model, state, distance=None, evaluation_game=False):
+        mcts = MCTSAgent(model.function, 
+                         state, 
+                         max_depth=self.max_depth, 
+                         transposition_table=self.prebuilt_transposition_table.copy(),
+                         c_puct = self.exploration,
+                         gamma = self.decay)
+
+        counter = 0
+        win = True
+        while not mcts.is_terminal():
+            print("(DB) step:", counter)
+
+            mcts.search(steps=self.max_steps)
+
+            # find next state
+            probs = mcts.action_probabilities(inv_temp = 10)
+            action = np.argmax(probs)
+            #action = np.random.choice(12, p=probs)
+
+            shortest_path = mcts.stats('shortest_path')
+
+            if not evaluation_game:
+                # record stats
+                self.self_play_stats['_game_id'].append(self.game_number)
+                self.self_play_stats['_step_id'].append(counter)
+                #self.self_play_stats['state']  # find a better representation of the state (that is easy to import)
+                self.self_play_stats['shortest_path'].append(shortest_path)
+                self.self_play_stats['action'].append(action)
+                self.self_play_stats['value'].append(mcts.stats('value'))
+
+                self.self_play_stats['prior'].append(mcts.stats('prior'))
+                self.self_play_stats['prior_dirichlet'].append(mcts.stats('prior_dirichlet'))
+                self.self_play_stats['visit_counts'].append(mcts.stats('visit_counts'))
+                self.self_play_stats['total_action_values'].append(mcts.stats('total_action_values'))
+
+                # training data (also recorded in stats)
+                self.training_data_states.append(state.input_array())
+                
+                policy = mcts.action_probabilities(inv_temp = 10)
+                self.training_data_policies.append(policy)
+                self.self_play_stats['updated_policy'].append(policy)
+                
+                self.training_data_values.append(0) # updated if game is success
+                self.self_play_stats['updated_value'].append(0)
+
+            # prepare for next state
+            counter += 1 
+            if shortest_path < 0:
+                print("(DB) no path")
+            if (counter > 1 and shortest_path < 0) or counter >= self.max_game_length:
+                win = False
+                break
+            mcts.advance_to_action(action)
+            
+
+        # update training values based on game results
+        if not evaluation_game:
+            if win:
+                value = 1
+                for i in range(counter):
+                    value *= self.decay
+                    self.training_data_values[-(i+1)] = value
+                    self.self_play_stats['updated_value'][-(i+1)] = value
+        
+            # record game stats
+            self.game_stats['_game_id'].append(self.game_number)
+            self.game_stats['distance_level'].append(self.training_distance_level)
+            self.game_stats['training_distance'].append(distance)
+            self.game_stats['max_game_length'].append(self.max_game_length)
+            self.game_stats['win'].append(win)
+            self.game_stats['total_steps'].append(counter if win else -1)
+
+        data = None
+        game_stats = None
+        self_play_stats = None
+        return win, data, game_stats, self_play_stats
+
+    def game_generator(self, model, state_generator):
+        # TODO make this a batch thing
+        # Attach games to the batch_game object and then run one step at a time
+
+        for game_id, state_tuple in enumerate(state_generator):
+            state, distance, level = state_tuple
+
+            game_tuple = self.play_game(model=model, state=state, distance=distance)
+            win, data, game_stats, self_play_stats = game_tuple
+
+            yield game_id, level, distance, win, data, game_stats, self_play_stats
+
     def generate_data_self_play(self):
         self.reset_self_play()
 
-        for game in range(self.games_per_generation):
-            print("\nGame {}/{}".format(game, self.games_per_generation))
-            self.play_game(self.best_model)
+        def state_generator():
+            for game in range(self.games_per_generation):
+                distance = self.random_distance(self.training_distance_level)
+                state = self.random_state(distance)
+                yield state, distance, self.training_distance_level
+
+        for game_results in self.game_generator(self.best_model, state_generator()):
+            game_id, level, distance, win, data, game_stats, self_play_stats = game_results
+
+            # update data
+            # TODO I should be updating data here
+            
+            # update win rates and level
+            self.update_win_and_level(distance, win)
+
+            # Print details
+            self.print_game_stats(game_results)
 
     def evaluate_and_choose_best_model(self):
         self.reset_self_play()
+
+        def state_generator():
+            for game in range(self.games_per_generation):
+                distance_level = max(self.training_distance_level, self.checkpoint_training_distance_level)
+                distance = self.random_distance(distance_level)
+                state = self.random_state(distance)
+                yield state, distance, self.training_distance_level
+        state_generator1, state_generator2 = tee(state_generator())
 
         best_model_wins = 0
         checkpoint_model_wins = 0
         ties = 0
 
-        for game in range(self.games_per_evaluation):
-            print("\nEvaluation Game {}/{}".format(game, self.games_per_evaluation))
-            print("\nBest model")
-            state, distance, win1 = self.play_game(self.best_model, state=None, distance=None, evaluation_game=True)
-
-            print("\nCheckpoint model")
-            _, _, win2 = self.play_game(self.checkpoint_model, state=state, distance=distance, evaluation_game=True)
+        for game_results1, game_results2 \
+            in zip(self.game_generator(self.best_model, state_generator1), 
+                   self.game_generator(self.checkpoint_model, state_generator2)):
             
+            game_id1, level1, distance1, win1, data1, game_stats1, self_play_stats1 = game_results1
+            game_id2, level2, distance2, win2, data2, game_stats2, self_play_stats2 = game_results2
+
             if win1 > win2:
                 best_model_wins += 1
             elif win1 < win2:
                 checkpoint_model_wins += 1
             else:
                 ties += 1
+
+            # Record data (for whichever model did best)
+            # TODO record data
+
+            # update win rates and level
+            self.update_win_and_level(distance1, win1)
+            self.update_win_and_level(distance2, win2, checkpoint=True)
+
+            # Print details
+            self.print_eval_game_stats(game_results1, game_results2, [best_model_wins, checkpoint_model_wins, ties])
 
         print("\nEvaluation results (win/lose/tie)")
         print("Best model      : {:2} / {:2} / {:2}".format(best_model_wins, checkpoint_model_wins, ties))
