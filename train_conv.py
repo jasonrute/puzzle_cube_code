@@ -427,7 +427,7 @@ class TrainingAgent():
                 self.self_play_stats['total_action_values'].append(mcts.stats('total_action_values'))
 
                 # training data (also recorded in stats)
-                self.training_data_states.append(state.input_array())
+                self.training_data_states.append(mcts.initial_node.state.input_array())
                 
                 policy = mcts.action_probabilities(inv_temp = 10)
                 self.training_data_policies.append(policy)

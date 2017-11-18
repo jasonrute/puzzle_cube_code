@@ -197,7 +197,7 @@ class TrainingAgent():
             # record stats
             self.self_play_stats['_game_id'].append(self.game_number)
             self.self_play_stats['_step_id'].append(counter)
-            self.self_play_stats['state'].append(state.input_array())
+            self.self_play_stats['state'].append(mcts.initial_node.state.input_array())
             
             self.self_play_stats['shortest_path'].append(mcts.stats('shortest_path'))
             self.self_play_stats['value'].append(mcts.stats('value'))

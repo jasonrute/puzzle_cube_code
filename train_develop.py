@@ -17,7 +17,7 @@ from datetime import datetime
 from mcts_nn_cube import State, MCTSAgent
 
 # this keeps track of the training runs, including the older versions that we are extending
-VERSIONS = ["v0.9.dev"]
+VERSIONS = ["v0.9.dev2"]
 
 # memory management
 MY_PROCESS = psutil.Process(os.getpid())
@@ -27,6 +27,7 @@ def memory_used():
 def str_between(s, start, end):
     return (s.split(start))[1].split(end)[0]
 
+"""
 # for putting the cube in 3D
 x3d = \
 np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2,
@@ -152,6 +153,7 @@ np.array([[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1,  0, -1,  4,  3,
            -1, -1, 48, -1, -1, 51, -1, 35, -1, -1],
           [ 3, -1, -1,  6, -1, -1, -1, -1, -1, -1, 50, -1, -1, 53, -1, 33, -1,
            -1, -1, 49, -1, -1, 52, -1, 34, -1, -1]])
+"""
 
 class GameAgent():
     def __init__(self, game_id):
@@ -193,7 +195,6 @@ class BatchGameAgent():
                              gamma = self.decay)
             
             game_agent = GameAgent(game_id)
-            game_agent.state = state.copy()
             game_agent.mcts = mcts
             game_agent.distance = distance
             game_agent.distance_level = distance_level
@@ -226,7 +227,7 @@ class BatchGameAgent():
             game_agent.self_play_stats['total_action_values'].append(mcts.stats('total_action_values'))
 
             # training data (also recorded in stats)
-            game_agent.data_states.append(game_agent.state.input_array())
+            game_agent.data_states.append(mcts.initial_node.state.input_array())
             
             policy = mcts.action_probabilities(inv_temp = 10)
             game_agent.data_policies.append(policy)
@@ -293,14 +294,14 @@ class TrainingAgent():
         self.prebuilt_transposition_table = None # built later
 
         # Training parameters (fixed)
-        self.games_per_generation = 2 # CHANGE BACK LATER 1000
+        self.games_per_generation = 50 # CHANGE BACK LATER 1000
         self.starting_distance = 1
         self.min_distance = 1
         self.win_rate_target = .5
         self.max_game_length = 100
         self.prev_generations_used_for_training = 10
         self.training_sample_size = 128 # CHANGE BACK LATER 2024 * 64
-        self.games_per_evaluation = 2 # CHANGE BACK LATER 100
+        self.games_per_evaluation = 10 # CHANGE BACK LATER 100
 
         # Training parameters preserved between generations
         self.training_distance_level = float(self.starting_distance)
@@ -708,7 +709,7 @@ class TrainingAgent():
                 self.self_play_stats['total_action_values'].append(mcts.stats('total_action_values'))
 
                 # training data (also recorded in stats)
-                self.training_data_states.append(state.input_array())
+                self.training_data_states.append(mcts.initial_node.state.input_array())
                 
                 policy = mcts.action_probabilities(inv_temp = 10)
                 self.training_data_policies.append(policy)
@@ -978,7 +979,7 @@ class TrainingAgent():
                 self.self_play_stats['total_action_values'].append(mcts.stats('total_action_values'))
 
                 # training data (also recorded in stats)
-                self.training_data_states.append(state.input_array())
+                self.training_data_states.append(mcts.initial_node.state.input_array())
                 
                 policy = mcts.action_probabilities(inv_temp = 10)
                 self.training_data_policies.append(policy)
