@@ -8,8 +8,8 @@ The training routine has three key phases
 - Neural network training
 """
 import numpy as np
-from collections import defaultdict, deque, Counter
-from itertools import tee
+from collections import defaultdict, deque, Counter, namedtuple
+import itertools
 import warnings
 import os, psutil # useful for memory management
 from datetime import datetime
@@ -152,6 +152,125 @@ np.array([[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1,  0, -1,  4,  3,
            -1, -1, 48, -1, -1, 51, -1, 35, -1, -1],
           [ 3, -1, -1,  6, -1, -1, -1, -1, -1, -1, 50, -1, -1, 53, -1, 33, -1,
            -1, -1, 49, -1, -1, 52, -1, 34, -1, -1]])
+
+class GameAgent():
+    def __init__(self, game_id):
+        self.game_id = game_id
+        self.self_play_stats=defaultdict(list)
+        self.game_stats=defaultdict(list)
+        self.data_states = []
+        self.data_policies = []
+        self.data_values = []
+        self.counter=0
+        self.done=False
+        self.win=False
+        # can attach other attributes as needed
+
+class BatchGameAgent():
+    """
+    Handles the steps of the games, including batch games.
+    """
+    def __init__(self, model, max_steps, max_depth, max_game_length, transposition_table, decay, exploration):
+        self.game_agents = deque()
+        self.model = model
+        self.max_depth = max_depth
+        self.max_steps = max_steps
+        self.max_game_length = max_game_length
+        self.transposition_table = transposition_table
+        self.exploration = exploration
+        self.decay = decay
+
+    def is_empty(self):
+        return not bool(self.game_agents)
+
+    def append_states(self, state_info_iter):
+        for game_id, state, distance, distance_level in state_info_iter:
+            mcts = MCTSAgent(self.model.function, 
+                             state.copy(), 
+                             max_depth = self.max_depth, 
+                             transposition_table = self.transposition_table.copy(),
+                             c_puct = self.exploration,
+                             gamma = self.decay)
+            
+            game_agent = GameAgent(game_id)
+            game_agent.state = state.copy()
+            game_agent.mcts = mcts
+            game_agent.distance = distance
+            game_agent.distance_level = distance_level
+
+            self.game_agents.append(game_agent)
+
+    def run_one_step(self):
+        for game_agent in self.game_agents:
+
+            mcts = game_agent.mcts
+            mcts.search(steps=self.max_steps)
+            
+            # find next state
+            probs = mcts.action_probabilities(inv_temp = 10)
+            action = np.argmax(probs)
+            #action = np.random.choice(12, p=probs)
+
+            shortest_path = game_agent.mcts.stats('shortest_path')
+
+            # record stats
+            game_agent.self_play_stats['_game_id'].append(game_agent.game_id)
+            game_agent.self_play_stats['_step_id'].append(game_agent.counter)
+            game_agent.self_play_stats['shortest_path'].append(shortest_path)
+            game_agent.self_play_stats['action'].append(action)
+            game_agent.self_play_stats['value'].append(mcts.stats('value'))
+
+            game_agent.self_play_stats['prior'].append(mcts.stats('prior'))
+            game_agent.self_play_stats['prior_dirichlet'].append(mcts.stats('prior_dirichlet'))
+            game_agent.self_play_stats['visit_counts'].append(mcts.stats('visit_counts'))
+            game_agent.self_play_stats['total_action_values'].append(mcts.stats('total_action_values'))
+
+            # training data (also recorded in stats)
+            game_agent.data_states.append(game_agent.state.input_array())
+            
+            policy = mcts.action_probabilities(inv_temp = 10)
+            game_agent.data_policies.append(policy)
+            game_agent.self_play_stats['updated_policy'].append(policy)
+            
+            game_agent.data_values.append(0) # updated if game is success
+            game_agent.self_play_stats['updated_value'].append(0)
+
+            # prepare for next state
+            game_agent.counter += 1 
+            if shortest_path < 0:
+                print("(DB) no path")
+            if (game_agent.counter > 1 and shortest_path < 0) or game_agent.counter >= self.max_game_length:
+                game_agent.win = False
+                game_agent.done = True
+            else:
+                mcts.advance_to_action(action)
+                if mcts.is_terminal():
+                    game_agent.win = True
+                    game_agent.done = True
+
+    def finished_game_results(self):
+        for _ in range(len(self.game_agents)):
+            game_agent = self.game_agents.popleft()
+
+            if not game_agent.done:
+                self.game_agents.append(game_agent)
+            else:
+                if game_agent.win:
+                    value = 1
+                    for i in range(game_agent.counter):
+                        value *= self.decay
+                        game_agent.data_values[-(i+1)] = value
+                        game_agent.self_play_stats['updated_value'][-(i+1)] = value
+          
+                # record game stats
+                game_agent.game_stats['_game_id'].append(game_agent.game_id)
+                game_agent.game_stats['distance_level'].append(game_agent.distance_level)
+                game_agent.game_stats['training_distance'].append(game_agent.distance)
+                game_agent.game_stats['max_game_length'].append(self.max_game_length)
+                game_agent.game_stats['win'].append(game_agent.win)
+                game_agent.game_stats['total_steps'].append(game_agent.counter if game_agent.win else -1)
+
+                yield game_agent
 
 class TrainingAgent():
     """
@@ -786,7 +905,11 @@ class TrainingAgent():
             self.training_distance_level = training_distance_level
 
     def print_game_stats(self, game_results):
-        game_id, level, distance, win, data, game_stats, self_play_stats = game_results
+        game_id = game_results.game_id
+        distance = game_results.distance
+        level = game_results.distance_level
+        win = game_results.win
+
         print("\nGame {}/{}".format(game_id, self.games_per_generation))
         lower_dist = int(level)
         lower_dist_win_rate = float('nan') if self.recent_games[lower_dist] == 0 else self.recent_wins[lower_dist] / self.recent_games[lower_dist]
@@ -799,8 +922,12 @@ class TrainingAgent():
             print("(DB)", "lose")
 
     def print_eval_game_stats(self, game_results1, game_results2, current_scores):
-        game_id1, level1, distance1, win1, data1, game_stats1, self_play_stats1 = game_results1
-        game_id2, level2, distance2, win2, data2, game_stats2, self_play_stats2 = game_results2
+        game_id1 = game_results1.game_id
+        game_id2 = game_results2.game_id
+        distance1 = game_results1.distance
+        distance2 = game_results2.distance
+        win1 = game_results1.win
+        win2 = game_results2.win
         assert game_id1 == game_id2
         assert distance1 == distance2
         print("\nEvaluation Game {}/{}".format(game_id1, self.games_per_evaluation))
@@ -808,7 +935,13 @@ class TrainingAgent():
         print("(DB) Best model:   ", "win " if win1 else "lose", "level:", self.training_distance_level)
         print("(DB) Current model:", "win " if win2 else "lose", "level:", self.checkpoint_training_distance_level)
 
-    def play_game(self, model, state, distance=None, evaluation_game=False):
+    def __remove_me__play_game(self, model, state, distance=None, evaluation_game=False):
+        self_play_stats = defaultdict(list)
+        game_stats = defaultdict(list)
+        training_data_states = []
+        training_data_policies = []
+        training_data_values = []
+
         mcts = MCTSAgent(model.function, 
                          state, 
                          max_depth=self.max_depth, 
@@ -886,49 +1019,86 @@ class TrainingAgent():
         self_play_stats = None
         return win, data, game_stats, self_play_stats
 
-    def game_generator(self, model, state_generator):
-        # TODO make this a batch thing
-        # Attach games to the batch_game object and then run one step at a time
+    def state_generator(self, max_game_id, evaluation=False):
+        while self.game_number < max_game_id:
+            if evaluation:
+                distance_level = max(self.training_distance_level, self.checkpoint_training_distance_level)
+            else:
+                distance_level = self.training_distance_level 
+            distance = self.random_distance(distance_level)
+            state = self.random_state(distance)
 
-        for game_id, state_tuple in enumerate(state_generator):
-            state, distance, level = state_tuple
+            print("(DB): Generate game", self.game_number)
+            yield self.game_number, state, distance, distance_level
 
-            game_tuple = self.play_game(model=model, state=state, distance=distance)
-            win, data, game_stats, self_play_stats = game_tuple
+            self.game_number += 1
 
-            yield game_id, level, distance, win, data, game_stats, self_play_stats
+    def game_generator(self, model, state_generator, batch_size=8):
+        """
+        Send games to the batch game agent and retrieve the finished games.
+        Yield the finished games in consecutive order of their id.
+        """
+        import heapq
+        finished_games = [] # priority queue
+
+        batch_game_agent = BatchGameAgent(model=model,
+                                          max_steps=self.max_steps, 
+                                          max_depth=self.max_depth,
+                                          max_game_length=self.max_game_length, 
+                                          transposition_table=self.prebuilt_transposition_table,
+                                          decay=self.decay, 
+                                          exploration=self.exploration) 
+
+        # attach inital batch
+        first_batch = list(itertools.islice(state_generator, batch_size))
+        if not first_batch:
+            return
+        batch_game_agent.append_states(first_batch)
+        next_game_id = first_batch[0][0] # game_id is first element
+
+        # loop until all done
+        while not batch_game_agent.is_empty():
+            batch_game_agent.run_one_step()
+            # collect all finished games
+            cnt = 0
+            for game_results in batch_game_agent.finished_game_results():
+                heapq.heappush(finished_games, (game_results.game_id, game_results))
+                cnt += 1
+
+            # return those which are next in order
+            print("AAA", "done games:", [g[1].game_id for g in finished_games])
+            while finished_games and finished_games[0][1].game_id == next_game_id:
+                yield heapq.heappop(finished_games)[1]
+                next_game_id += 1
+            
+            # fill up with new batch
+            replacement_batch = itertools.islice(state_generator, cnt)
+            batch_game_agent.append_states(replacement_batch)
 
     def generate_data_self_play(self):
-        self.reset_self_play()
+        # don't reset self_play since using the evaluation results to also get data
+        #self.reset_self_play()
 
-        def state_generator():
-            for game in range(self.games_per_generation):
-                distance = self.random_distance(self.training_distance_level)
-                state = self.random_state(distance)
-                yield state, distance, self.training_distance_level
-
-        for game_results in self.game_generator(self.best_model, state_generator()):
-            game_id, level, distance, win, data, game_stats, self_play_stats = game_results
-
+        for game_results in self.game_generator(self.best_model, self.state_generator(self.games_per_generation)):
             # update data
-            # TODO I should be updating data here
+            for k, v in game_results.self_play_stats.items():
+                self.self_play_stats[k] += v
+            for k, v in game_results.game_stats.items():
+                self.game_stats[k] += v
+            self.training_data_states += game_results.data_states
+            self.training_data_policies += game_results.data_policies
+            self.training_data_values += game_results.data_values
             
             # Print details
             self.print_game_stats(game_results)
-            
+
             # update win rates and level
-            self.update_win_and_level(distance, win)
+            self.update_win_and_level(game_results.distance, game_results.win)
 
     def evaluate_and_choose_best_model(self):
         self.reset_self_play()
 
-        def state_generator():
-            for game in range(self.games_per_generation):
-                distance_level = max(self.training_distance_level, self.checkpoint_training_distance_level)
-                distance = self.random_distance(distance_level)
-                state = self.random_state(distance)
-                yield state, distance, self.training_distance_level
-        state_generator1, state_generator2 = tee(state_generator())
+        state_generator1, state_generator2 = itertools.tee(self.state_generator(self.games_per_evaluation, evaluation=True))
 
         best_model_wins = 0
         checkpoint_model_wins = 0
@@ -937,23 +1107,29 @@ class TrainingAgent():
         for game_results1, game_results2 \
             in zip(self.game_generator(self.best_model, state_generator1), 
                    self.game_generator(self.checkpoint_model, state_generator2)):
-            
-            game_id1, level1, distance1, win1, data1, game_stats1, self_play_stats1 = game_results1
-            game_id2, level2, distance2, win2, data2, game_stats2, self_play_stats2 = game_results2
 
-            if win1 > win2:
+            if game_results1.win > game_results2.win:
                 best_model_wins += 1
-            elif win1 < win2:
+                game_results = game_results1
+            elif game_results1.win < game_results2.win:
                 checkpoint_model_wins += 1
+                game_results = game_results2
             else:
                 ties += 1
+                game_results = game_results1
 
-            # Record data (for whichever model did best)
-            # TODO record data
+            # update data
+            for k, v in game_results.self_play_stats.items():
+                self.self_play_stats[k] += v
+            for k, v in game_results.game_stats.items():
+                self.game_stats[k] += v
+            self.training_data_states += game_results.data_states
+            self.training_data_policies += game_results.data_policies
+            self.training_data_values += game_results.data_values
 
             # update win rates and level
-            self.update_win_and_level(distance1, win1)
-            self.update_win_and_level(distance2, win2, checkpoint=True)
+            self.update_win_and_level(game_results1.distance, game_results1.win)
+            self.update_win_and_level(game_results2.distance, game_results2.win, checkpoint=True)
 
             # Print details
             self.print_eval_game_stats(game_results1, game_results2, [best_model_wins, checkpoint_model_wins, ties])
@@ -982,6 +1158,8 @@ def main():
     agent.load_models()
     
     print("\nBegin training loop...")
+    agent.reset_self_play()
+
     while True:
         print("\nBegin self-play data generation...")
         agent.generate_data_self_play()
