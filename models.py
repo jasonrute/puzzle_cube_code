@@ -278,6 +278,38 @@ class ConvModel():
         return inputs, policies, values
 
     @staticmethod
+    def validate_data(inputs, policies, values, gamma=.95):
+        """
+        Validate the input, policy, value data to make sure it is of good quality.
+        It must be in order and not shuffled.
+        """
+        from batch_cube import BatchCube
+        import math
+
+        next_state = None
+        next_value = None
+
+        for state, policy, value in zip(inputs, policies, values):
+            cube = BatchCube()
+            cube.load_bit_array(state)
+
+            if next_state is not None:
+                assert next_state.shape == state.shape
+                assert np.array_equal(next_state, state), "\nstate:\n" + str(state) + "\nnext_state:\n" + str(next_state)
+            if next_value is not None:
+                assert round(math.log(next_value, .95)) == round(math.log(value, .95)), "next_value:" + str(next_value) + "   value:" + str(value)
+
+            action = np.argmax(policy)
+            cube.step([action])
+
+            if value == 0 or value == gamma:
+                next_value = None
+                next_state = None
+            else:
+                next_value = value / gamma
+                next_state = cube.bit_array().reshape((54, 6))
+
+    @staticmethod
     def preprocess_training_data(inputs, policies, values):
         """
         Convert training data to arrays in preparation for saving.
