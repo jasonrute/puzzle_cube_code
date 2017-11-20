@@ -281,8 +281,8 @@ class TrainingAgent():
         import models 
 
         # Model (NN) parameters (fixed)
-        self.checkpoint_model = models.ConvModel() # this doesn't build and/or load the model yet
-        self.best_model = models.ConvModel()       # this doesn't build and/or load the model yet
+        self.checkpoint_model = models.ConvModel2D3D() # this doesn't build and/or load the model yet
+        self.best_model = models.ConvModel2D3D()       # this doesn't build and/or load the model yet
         self.learning_rate = .001
 
         # MCTS parameters (fixed)
