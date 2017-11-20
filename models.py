@@ -439,15 +439,14 @@ class ConvModel2D3D(BaseModel):
             - reshape to remove last dimension:
                 None (samples) x filter_size x 54
             """ 
-            print("in    ", in_tensor.shape)
             # pad (output dim: None x 55 x ?)
             padded = Lambda(lambda x: K.temporal_padding(x, (0, 1)))(in_tensor) # just pad end
-            print("padded", padded.shape)
+            
             # align neighbors (output dim: None x 54 x 27 x ?)
             #aligned = K.gather(padded, neighbors)
             #aligned = padded[ neighbors[np.newaxis].astype(np.int32), :]
             aligned = Lambda(lambda x: tf.gather(x, neighbors, axis=1))(padded)
-            print("align ", aligned.shape)
+            
             # 2D convolution in one axis (output dim: None x 54 x 1 x filter_size)
             conv = Conv2D(filter_size, kernel_size=(1, 27), 
                           strides=(1, 1), 
@@ -456,7 +455,6 @@ class ConvModel2D3D(BaseModel):
                           kernel_regularizer=l2(0.001), 
                           bias_regularizer=l2(0.001))(aligned)
 
-            print("conv  ", conv.shape)
             # reshape (output dim: None x 54 x filter_size)
             out_tensor = Lambda(lambda x: K.squeeze(x, axis=2))(conv)
 
