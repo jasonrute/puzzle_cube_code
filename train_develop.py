@@ -1079,7 +1079,7 @@ class TrainingAgent():
             distance = self.random_distance(distance_level)
             state = self.random_state(distance)
 
-            print("(DB): Generate game", self.game_number)
+            print("(DB)", "starting game", self.game_number, "...")
             yield self.game_number, state, distance, distance_level
 
             self.game_number += 1
@@ -1121,7 +1121,9 @@ class TrainingAgent():
                 cnt += 1
 
             # return those which are next in order
-            print("AAA", "done games:", [g[1].game_id for g in finished_games])
+            if not finished_games or finished_games[0][1].game_id != next_game_id:
+                print("(DB)", "waiting on game", next_game_id, "(finished games:", ",".join(str(g[1].game_id) for g in finished_games), ") ...")
+
             while finished_games and finished_games[0][1].game_id == next_game_id:
                 yield heapq.heappop(finished_games)[1]
                 next_game_id += 1
