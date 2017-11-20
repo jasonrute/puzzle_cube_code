@@ -7,6 +7,7 @@ import numpy as np
 import time
 from batch_cube import position_permutations, color_permutations, action_permutations
 import warnings
+import threading, queue
 
 def random_rotation_wrapper(model_policy_value):
     def rotationally_randomized_policy_value(input_array):
@@ -57,6 +58,13 @@ def augment_data(inputs, policies, values):
 
     return inputs, policies, values
 
+class Task:
+    def __init__(self):
+        self.lock = threading.Condition()
+        self.input = None
+        self.output = None
+        self.kill_thread = False
+
 class BaseModel(): 
     """
     The Base Class for my models.  Assuming Keras/Tensorflow backend and
@@ -72,6 +80,27 @@ class BaseModel():
         self.use_cache = use_cache
         self.rotationally_randomize = rotationally_randomize
         self.max_cache_size = max_cache_size
+
+        # multithreading, batch evaluation support
+        self.multithreaded = False
+        self.ideal_batch_size = 128
+        self._lock = threading.RLock()
+        self._max_batch_size = 1
+        self._queue = queue.Queue()
+        self._worker_thread = None
+
+    def set_max_batch_size(self, max_batch_size):
+        with self._lock:
+            self._max_batch_size = max_batch_size
+        
+        # put a dummy task on the queue to make sure the worker notices the update to the max_batch_size
+        dummy_task = Task()
+        with dummy_task.lock:
+            self._queue.put(dummy_task)
+
+    def get_max_batch_size(self):
+        with self._lock:
+            return self._max_batch_size
 
     def _build(self, model):
         """
@@ -105,6 +134,10 @@ class BaseModel():
         from keras import backend as K
         self._cache = OrderedDict()
         self._get_output = K.function([self._model.input, K.learning_phase()], [self._model.output[0], self._model.output[1]])
+        if self.multithreaded:
+            if self._worker_thread is not None:
+                self.stop_worker_thread()
+            self.start_worker_thread()
 
     def _raw_function(self, input_array):
         t1 = time.time()
@@ -113,6 +146,56 @@ class BaseModel():
         self._run_count += 1
         self._time_sum = time.time() - t1 
         return out
+
+    def _raw_function_worker(self):
+        import numpy as np
+        task_list = []
+
+        while True:
+            # retrieve items from the queue
+            task = self._queue.get()
+            with task.lock:
+                if task.kill_thread:
+                    task.lock.notify()
+                    return
+                
+                if task.input is not None: #ignore other tasks as dummy tasks
+                    task_list.append(task)
+
+            if task_list and len(task_list) >= min(self.ideal_batch_size, self.get_max_batch_size()):
+                array = np.array([task.input.squeeze(axis=0) for task in task_list])
+                policies, values = self._get_output([array, 0])
+
+                for p, v, task in zip(policies, values, task_list):
+                    with task.lock:
+                        task.output = [p[np.newaxis], v[np.newaxis]]
+                        task.lock.notify() # mark as being complete
+
+                task_list = []
+
+    def start_worker_thread(self):
+        self._worker_thread = threading.Thread(target=self._raw_function_worker, args=())
+        self._worker_thread.daemon = True
+        self._worker_thread.start()
+
+    def stop_worker_thread(self):
+        poison_pill = Task()
+        with poison_pill.lock:
+            poison_pill.kill_thread = True
+            self._queue.put(poison_pill) # put task on queue to be processed
+            poison_pill.lock.wait() # wait for poison pill to be processed
+        self._worker_thread.join() # wait until thread finishes
+        self._worker_thread = None
+
+    def _raw_function_pass_to_worker(self, input_array):
+        task = Task()
+
+        # put the value on the queue to be processed
+        with task.lock:
+            task.input = input_array
+            self._queue.put(task) # put task on queue to be processed
+            task.lock.wait() # wait until task is processed
+            return task.output # return output
 
     def function(self, input_array):
         """
@@ -129,7 +212,10 @@ class BaseModel():
                 return self._cache[key]
         
         input_array = self.process_single_input(input_array)
-        policy, value = self._raw_function(input_array)
+        if self.multithreaded:
+            policy, value = self._raw_function_pass_to_worker(input_array)
+        else:
+            policy, value = self._raw_function(input_array)
         
         policy = policy.reshape((12,))
         value = value[0, 0]

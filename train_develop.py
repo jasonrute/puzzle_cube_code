@@ -201,53 +201,83 @@ class BatchGameAgent():
 
             self.game_agents.append(game_agent)
 
+    def run_game_agent_one_step(self, game_agent):
+        mcts = game_agent.mcts
+        mcts.search(steps=self.max_steps)
+
+        # reduce the max batch size to prevent the worker from blocking
+        self.model.set_max_batch_size(self.model.get_max_batch_size() - 1)
+
+    def process_completed_step(self, game_agent):
+        mcts = game_agent.mcts
+            
+        # find next state
+        probs = mcts.action_probabilities(inv_temp = 10)
+        action = np.argmax(probs)
+        #action = np.random.choice(12, p=probs)
+
+        shortest_path = game_agent.mcts.stats('shortest_path')
+
+        # record stats
+        game_agent.self_play_stats['_game_id'].append(game_agent.game_id)
+        game_agent.self_play_stats['_step_id'].append(game_agent.counter)
+        game_agent.self_play_stats['shortest_path'].append(shortest_path)
+        game_agent.self_play_stats['action'].append(action)
+        game_agent.self_play_stats['value'].append(mcts.stats('value'))
+
+        game_agent.self_play_stats['prior'].append(mcts.stats('prior'))
+        game_agent.self_play_stats['prior_dirichlet'].append(mcts.stats('prior_dirichlet'))
+        game_agent.self_play_stats['visit_counts'].append(mcts.stats('visit_counts'))
+        game_agent.self_play_stats['total_action_values'].append(mcts.stats('total_action_values'))
+
+        # training data (also recorded in stats)
+        game_agent.data_states.append(mcts.initial_node.state.input_array())
+        
+        policy = mcts.action_probabilities(inv_temp = 10)
+        game_agent.data_policies.append(policy)
+        game_agent.self_play_stats['updated_policy'].append(policy)
+        
+        game_agent.data_values.append(0) # updated if game is success
+        game_agent.self_play_stats['updated_value'].append(0)
+
+        # prepare for next state
+        game_agent.counter += 1 
+        if shortest_path < 0:
+            print("(DB) no path")
+        if (game_agent.counter > 1 and shortest_path < 0) or game_agent.counter >= self.max_game_length:
+            game_agent.win = False
+            game_agent.done = True
+        else:
+            mcts.advance_to_action(action)
+            if mcts.is_terminal():
+                game_agent.win = True
+                game_agent.done = True
+
+    def run_one_step_with_threading(self):
+        import threading
+        # start threads
+        self.model.set_max_batch_size(len(self.game_agents))
+
+        threads = []
+        for game_agent in self.game_agents:
+            t = threading.Thread(target=self.run_game_agent_one_step, args=(game_agent, ))
+            t.start()
+            threads.append(t)
+
+        # wait for threads to finish
+        for t in threads:
+            t.join()
+
+        for game_agent in self.game_agents:
+            self.process_completed_step(game_agent)
+
     def run_one_step(self):
         for game_agent in self.game_agents:
 
             mcts = game_agent.mcts
             mcts.search(steps=self.max_steps)
             
-            # find next state
-            probs = mcts.action_probabilities(inv_temp = 10)
-            action = np.argmax(probs)
-            #action = np.random.choice(12, p=probs)
-
-            shortest_path = game_agent.mcts.stats('shortest_path')
-
-            # record stats
-            game_agent.self_play_stats['_game_id'].append(game_agent.game_id)
-            game_agent.self_play_stats['_step_id'].append(game_agent.counter)
-            game_agent.self_play_stats['shortest_path'].append(shortest_path)
-            game_agent.self_play_stats['action'].append(action)
-            game_agent.self_play_stats['value'].append(mcts.stats('value'))
-
-            game_agent.self_play_stats['prior'].append(mcts.stats('prior'))
-            game_agent.self_play_stats['prior_dirichlet'].append(mcts.stats('prior_dirichlet'))
-            game_agent.self_play_stats['visit_counts'].append(mcts.stats('visit_counts'))
-            game_agent.self_play_stats['total_action_values'].append(mcts.stats('total_action_values'))
-
-            # training data (also recorded in stats)
-            game_agent.data_states.append(mcts.initial_node.state.input_array())
-            
-            policy = mcts.action_probabilities(inv_temp = 10)
-            game_agent.data_policies.append(policy)
-            game_agent.self_play_stats['updated_policy'].append(policy)
-            
-            game_agent.data_values.append(0) # updated if game is success
-            game_agent.self_play_stats['updated_value'].append(0)
-
-            # prepare for next state
-            game_agent.counter += 1 
-            if shortest_path < 0:
-                print("(DB) no path")
-            if (game_agent.counter > 1 and shortest_path < 0) or game_agent.counter >= self.max_game_length:
-                game_agent.win = False
-                game_agent.done = True
-            else:
-                mcts.advance_to_action(action)
-                if mcts.is_terminal():
-                    game_agent.win = True
-                    game_agent.done = True
+            self.process_completed_step(game_agent)
 
     def finished_game_results(self):
         for _ in range(len(self.game_agents)):
@@ -280,9 +310,15 @@ class TrainingAgent():
     def __init__(self):
         import models 
 
+        # Threading
+        self.multithreaded = True
+
         # Model (NN) parameters (fixed)
         self.checkpoint_model = models.ConvModel2D3D() # this doesn't build and/or load the model yet
         self.best_model = models.ConvModel2D3D()       # this doesn't build and/or load the model yet
+        if self.multithreaded:
+            self.checkpoint_model.multithreaded = True
+            self.best_model.multithreaded = True
         self.learning_rate = .001
 
         # MCTS parameters (fixed)
@@ -1073,7 +1109,11 @@ class TrainingAgent():
 
         # loop until all done
         while not batch_game_agent.is_empty():
-            batch_game_agent.run_one_step()
+            if self.multithreaded:
+                batch_game_agent.run_one_step_with_threading()
+            else:
+                batch_game_agent.run_one_step()
+
             # collect all finished games
             cnt = 0
             for game_results in batch_game_agent.finished_game_results():
