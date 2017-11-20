@@ -1241,5 +1241,7 @@ if __name__ == '__main__':
         main()
     except KeyboardInterrupt:
         print("\nExiting the program...\nGood bye!")
+    finally:
+        pass
     
     
