@@ -89,6 +89,9 @@ class BaseModel():
         self._queue = queue.Queue()
         self._worker_thread = None
 
+        # to reimplement for each model.  Leave off the first dimension.
+        self.input_shape = (54, 6)
+
     def set_max_batch_size(self, max_batch_size):
         with self._lock:
             self._max_batch_size = max_batch_size
@@ -133,7 +136,13 @@ class BaseModel():
         """
         from keras import backend as K
         self._cache = OrderedDict()
+
+        # run model once to make sure it loads correctly (needed for K.function to work on new models)
+        trivial_input = np.zeros((1, ) + self.input_shape)
+        self._model.predict(trivial_input)
+
         self._get_output = K.function([self._model.input, K.learning_phase()], [self._model.output[0], self._model.output[1]])
+        
         if self.multithreaded:
             if self._worker_thread is not None:
                 self.stop_worker_thread()
@@ -352,6 +361,7 @@ class ConvModel(BaseModel):
 
     def __init__(self, use_cache=True, max_cache_size=10000, rotationally_randomize=False):
         BaseModel.__init__(self, use_cache, max_cache_size, rotationally_randomize)
+        self.input_shape = (6 * 6, 3, 3)
 
     def build(self):
         """
@@ -490,6 +500,7 @@ class ConvModel2D3D(BaseModel):
 
     def __init__(self, use_cache=True, max_cache_size=10000, rotationally_randomize=False):
         BaseModel.__init__(self, use_cache, max_cache_size, rotationally_randomize)
+        self.input_shape = (54, 6)
 
     def build(self):
         """
