@@ -644,7 +644,7 @@ class TrainingAgent():
                                 and f.endswith(".h5")]
             
             # go through in reverse order
-            for gen, f in reversed(data_files):
+            for gen, f in reversed(sorted(data_files)):
                 if counter > self.prev_generations_used_for_training:
                     break
                 
