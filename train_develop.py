@@ -333,14 +333,15 @@ class TrainingAgent():
         self.validate_training_data = True
 
         # Training parameters (fixed)
-        self.games_per_generation = 10 # CHANGE BACK LATER 1000
+        self.batch_size = 32
+        self.games_per_generation = 512
         self.starting_distance = 1
         self.min_distance = 1
         self.win_rate_target = .5
         self.max_game_length = 100
-        self.prev_generations_used_for_training = 10
-        self.training_sample_size = 128 # CHANGE BACK LATER 2024 * 64
-        self.games_per_evaluation = 5 # CHANGE BACK LATER 100
+        self.prev_generations_used_for_training = 8
+        self.training_sample_ratio = 1/self.prev_generations_used_for_training
+        self.games_per_evaluation = 128
 
         # Training parameters preserved between generations
         self.training_distance_level = float(self.starting_distance)
@@ -672,7 +673,8 @@ class TrainingAgent():
             self.checkpoint_model.process_training_data(inputs_all, outputs_policy_all, outputs_value_all, augment=True)
 
         n = len(inputs_all)
-        sample_idx = np.random.choice(n, size=self.training_sample_size)
+        sample_size = int((n * self.training_sample_ratio) // 32 + 1) * 32 # roughly self.training_sample_ratio % of samples
+        sample_idx = np.random.choice(n, size=sample_size)
         inputs = inputs_all[sample_idx]
         outputs_policy = outputs_policy_all[sample_idx]
         outputs_value = outputs_value_all[sample_idx]
