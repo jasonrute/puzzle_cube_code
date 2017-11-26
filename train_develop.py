@@ -242,8 +242,8 @@ class BatchGameAgent():
 
         # prepare for next state
         game_agent.counter += 1 
-        if shortest_path < 0:
-            print("(DB) no path")
+        #if shortest_path < 0:
+        #    print("(DB) no path")
         if (game_agent.counter > 1 and shortest_path < 0) or game_agent.counter >= self.max_game_length:
             game_agent.win = False
             game_agent.done = True
@@ -960,31 +960,66 @@ class TrainingAgent():
         distance = game_results.distance
         level = game_results.distance_level
         win = game_results.win
+        steps = game_results.game_stats['total_steps'][0]
+        lost_way = game_results.self_play_stats['shortest_path'][0] < 0
 
         print("\nGame {}/{}".format(game_id, self.games_per_generation))
-        lower_dist = int(level)
+        print("distance: {} (level: {:.2f})".format(distance, level))
+        if win:
+            print("win ({}{} steps)".format(steps, "*" if lost_way else ""))
+        else:
+            print("loss")
+        print()
+        new_level = self.training_distance_level
+        lower_dist = int(new_level)
         lower_dist_win_rate = float('nan') if self.recent_games[lower_dist] == 0 else self.recent_wins[lower_dist] / self.recent_games[lower_dist]
         upper_dist_win_rate = float('nan') if self.recent_games[lower_dist+1] == 0 else self.recent_wins[lower_dist+1] / self.recent_games[lower_dist+1]
-        print("(DB) distance:", distance, 
-              "(level: {:.2f} win rates: {}: {:.2f} {}: {:.2f})".format(level, lower_dist, lower_dist_win_rate, lower_dist+1, upper_dist_win_rate))
-        if win:
-            print("(DB)", "win")
-        else:
-            print("(DB)", "lose")
+        print("(DB) new level: {:.2f}, win rates: {}: {:.2f} {}: {:.2f}".format(new_level, lower_dist, lower_dist_win_rate, lower_dist+1, upper_dist_win_rate))
+        print(end="", flush=True) # force stdout to flush (fixes buffering issues)
 
     def print_eval_game_stats(self, game_results1, game_results2, current_scores):
         game_id1 = game_results1.game_id
         game_id2 = game_results2.game_id
         distance1 = game_results1.distance
         distance2 = game_results2.distance
+        level1 = game_results1.distance_level
+        level2 = game_results2.distance_level
         win1 = game_results1.win
         win2 = game_results2.win
+        steps1 = game_results1.game_stats['total_steps'][0]
+        steps2 = game_results2.game_stats['total_steps'][0]
+        lost_way1 = game_results1.self_play_stats['shortest_path'][0] < 0
+        lost_way2 = game_results2.self_play_stats['shortest_path'][0] < 0
         assert game_id1 == game_id2
         assert distance1 == distance2
         print("\nEvaluation Game {}/{}".format(game_id1, self.games_per_evaluation))
-        print("(DB) distance:", distance1)
-        print("(DB) Best model:   ", "win " if win1 else "lose", "level:", self.training_distance_level)
-        print("(DB) Current model:", "win " if win2 else "lose", "level:", self.checkpoint_training_distance_level)
+        print("distance: {} (levels: {:.2f} {:.2f})".format(distance1, level1, level2))
+        if win1:
+            print("best model:       win ({}{} steps)".format(steps1, "*" if lost_way1 else ""))
+        else:
+            print("best model:       loss")
+        if win2:
+            print("checkpoint model: win ({}{} steps)".format(steps2, "*" if lost_way2 else ""))
+        else:
+            print("checkpoint model: loss")
+
+        print()
+        new_level = self.training_distance_level
+        recent_games = self.recent_games
+        recent_wins = self.recent_wins
+        lower_dist = int(new_level)
+        lower_dist_win_rate = float('nan') if recent_games[lower_dist] == 0 else recent_wins[lower_dist] / recent_games[lower_dist]
+        upper_dist_win_rate = float('nan') if recent_games[lower_dist+1] == 0 else recent_wins[lower_dist+1] / recent_games[lower_dist+1]
+        print("(DB) best model new level: {:.2f}, win rates: {}: {:.2f} {}: {:.2f}".format(new_level, lower_dist, lower_dist_win_rate, lower_dist+1, upper_dist_win_rate))
+        
+        new_level = self.checkpoint_training_distance_level
+        recent_games = self.checkpoint_recent_games
+        recent_wins = self.checkpoint_recent_wins
+        lower_dist = int(new_level)
+        lower_dist_win_rate = float('nan') if recent_games[lower_dist] == 0 else recent_wins[lower_dist] / recent_games[lower_dist]
+        upper_dist_win_rate = float('nan') if recent_games[lower_dist+1] == 0 else recent_wins[lower_dist+1] / recent_games[lower_dist+1]
+        print("(DB) checkpoint new level: {:.2f}, win rates: {}: {:.2f} {}: {:.2f}".format(new_level, lower_dist, lower_dist_win_rate, lower_dist+1, upper_dist_win_rate))
+        print(end="", flush=True) # force stdout to flush (fixes buffering issues)
 
     def __remove_me__play_game(self, model, state, distance=None, evaluation_game=False):
         self_play_stats = defaultdict(list)
@@ -1084,7 +1119,7 @@ class TrainingAgent():
 
             self.game_number += 1
 
-    def game_generator(self, model, state_generator, batch_size=8):
+    def game_generator(self, model, state_generator, max_batch_size, return_in_order):
         """
         Send games to the batch game agent and retrieve the finished games.
         Yield the finished games in consecutive order of their id.
@@ -1099,6 +1134,11 @@ class TrainingAgent():
                                           transposition_table=self.prebuilt_transposition_table,
                                           decay=self.decay, 
                                           exploration=self.exploration) 
+
+        # scale batch size up to make for better beginning determination of distance level
+        # use batch size of 1 for first 16 games
+        batch_size = 1
+        cnt = 16
 
         # attach inital batch
         first_batch = list(itertools.islice(state_generator, batch_size))
@@ -1115,28 +1155,43 @@ class TrainingAgent():
                 batch_game_agent.run_one_step()
 
             # collect all finished games
-            cnt = 0
             for game_results in batch_game_agent.finished_game_results():
                 heapq.heappush(finished_games, (game_results.game_id, game_results))
-                cnt += 1
 
-            # return those which are next in order
-            if not finished_games or finished_games[0][1].game_id != next_game_id:
-                print("(DB)", "waiting on game", next_game_id, "(finished games:", ",".join(str(g[1].game_id) for g in finished_games), ") ...")
+            # check if available slots
+            if len(batch_game_agent.game_agents) < batch_size:
+                
+                # increment batch size
+                cnt -= 1
+                if cnt < 0:
+                    batch_size = max_batch_size
 
-            while finished_games and finished_games[0][1].game_id == next_game_id:
-                yield heapq.heappop(finished_games)[1]
-                next_game_id += 1
-            
-            # fill up with new batch
-            replacement_batch = itertools.islice(state_generator, cnt)
+            if return_in_order:
+                # return those which are next in order
+                if not finished_games or finished_games[0][1].game_id != next_game_id:
+                    print("(DB)", "waiting on game", next_game_id, "(finished games:", ",".join(str(g[1].game_id) for g in finished_games), ") ...")
+
+                while finished_games and finished_games[0][1].game_id == next_game_id:
+                    yield heapq.heappop(finished_games)[1]
+                    next_game_id += 1
+            else:
+                # return in order they are finished
+                if not finished_games:
+                    print("(DB) ...")
+
+                while finished_games:
+                    yield heapq.heappop(finished_games)[1]
+
+            # fill up the batch (do after yields to ensure that self.training_distance_level is updated)
+            available_slots = batch_size - len(batch_game_agent.game_agents)
+            replacement_batch = itertools.islice(state_generator, available_slots)
             batch_game_agent.append_states(replacement_batch)
 
     def generate_data_self_play(self):
         # don't reset self_play since using the evaluation results to also get data
         #self.reset_self_play()
 
-        for game_results in self.game_generator(self.best_model, self.state_generator(self.games_per_generation)):
+        for game_results in self.game_generator(self.best_model, self.state_generator(self.games_per_generation), max_batch_size=self.batch_size, return_in_order=False):
             # update data
             for k, v in game_results.self_play_stats.items():
                 self.self_play_stats[k] += v
@@ -1146,11 +1201,11 @@ class TrainingAgent():
             self.training_data_policies += game_results.data_policies
             self.training_data_values += game_results.data_values
             
-            # Print details
-            self.print_game_stats(game_results)
-
             # update win rates and level
             self.update_win_and_level(game_results.distance, game_results.win)
+
+            # Print details
+            self.print_game_stats(game_results)
 
     def evaluate_and_choose_best_model(self):
         self.reset_self_play()
@@ -1162,8 +1217,8 @@ class TrainingAgent():
         ties = 0
 
         for game_results1, game_results2 \
-            in zip(self.game_generator(self.best_model, state_generator1), 
-                   self.game_generator(self.checkpoint_model, state_generator2)):
+            in zip(self.game_generator(self.best_model, state_generator1, max_batch_size=self.batch_size, return_in_order=True), 
+                   self.game_generator(self.checkpoint_model, state_generator2, max_batch_size=self.batch_size, return_in_order=True)):
 
             if game_results1.win > game_results2.win:
                 best_model_wins += 1
