@@ -815,7 +815,7 @@ class TrainingAgent():
                                         else self.recent_wins[lower_dist] / self.recent_games[lower_dist]
                 upper_dist_win_rate = 0. if self.recent_games[lower_dist+1] == 0 \
                                         else self.recent_wins[lower_dist+1] / self.recent_games[lower_dist+1]
-                # notice that we won't divide by zero hear since upper_dist_win_rate < lower_dist_win_rate
+                # notice that we won't divide by zero here since upper_dist_win_rate < lower_dist_win_rate
                 self.training_distance_level = lower_dist + (lower_dist_win_rate - self.win_rate_target) / (lower_dist_win_rate - upper_dist_win_rate)
 
         return state, distance, win
@@ -947,7 +947,7 @@ class TrainingAgent():
                                     else recent_wins[lower_dist] / recent_games[lower_dist]
             upper_dist_win_rate = (.99 * self.win_rate_target) if recent_games[lower_dist+1] == 0 \
                                     else recent_wins[lower_dist+1] / recent_games[lower_dist+1]
-            # notice that we won't divide by zero hear since upper_dist_win_rate < lower_dist_win_rate
+            # notice that we won't divide by zero here since upper_dist_win_rate < lower_dist_win_rate
             training_distance_level = lower_dist + (lower_dist_win_rate - self.win_rate_target) / (lower_dist_win_rate - upper_dist_win_rate)
 
         if checkpoint:
