@@ -169,7 +169,7 @@ class MCTSNode():
 class MCTSAgent():
 
     def __init__(self, model_policy_value, initial_state, max_depth, transposition_table={}, c_puct=1.0, gamma=.95):
-        self.model_policy_value = rotationally_randomize(model_policy_value)
+        self.model_policy_value = model_policy_value
         self.max_depth = max_depth
         self.total_steps = 0
         self.transposition_table = transposition_table
