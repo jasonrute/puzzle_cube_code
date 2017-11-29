@@ -9,20 +9,6 @@ from batch_cube import position_permutations, color_permutations, action_permuta
 import warnings
 import threading, queue
 
-def random_rotation_wrapper(model_policy_value):
-    def rotationally_randomized_policy_value(input_array):
-        # rotate colors
-        input_array = input_array.reshape((54, 6))
-        rotation_id = np.random.choice(48)
-        pos_perm = position_permutations[rotation_id][:,np.newaxis]
-        col_perm = color_permutations[rotation_id][np.newaxis]
-        input_array = input_array[pos_perm, col_perm]
-
-        policy, value = model_policy_value(input_array)
-
-        return policy[opp_action_permutations[rotation_id]], value
-
-    return rotationally_randomized_policy_value
 
 def randomize_input(input_array):
     pos_perm = position_permutations[rotation_id][:,np.newaxis]
