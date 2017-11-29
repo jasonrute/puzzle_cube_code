@@ -9,34 +9,57 @@ max_depth_value = 0.0
 
 class State():
     """ This is application specfic """
-    def __init__(self, internal_state=None):
-        if internal_state is None:
-            internal_state = BatchCube(1)
-        
+    def __init__(self, internal_state=None, _input_array=None, history=1):
+        self.history = history
+
         self.internal_state = internal_state
+        if self.internal_state is None:
+            self.internal_state = BatchCube(1)
+
+        self._input_array = _input_array
+        if self._input_array is None:
+            # dimensions = (history, squares, colors)
+            self._input_array = self.internal_state.bit_array().reshape((1, 54, 6))
+            if self.history > 1:
+                input_array_history = np.zeros((self.history-1, 54, 6), dtype=int)
+                self._input_array = np.concatenate([self._input_array, input_array_history], axis=0)
 
     def copy(self):
-        return State(self.internal_state.copy())
+        return State(self.internal_state.copy(), _input_array=self._input_array.copy(), history=self.history)
 
-    def import_bit_array(self, bit_array):
-        color_idx = np.indices((1, 54, 6))[2]
-        array = (color_idx * bit_array.reshape((1, 54, 6))).max(axis=2)
-        self.internal_state = BatchCube(cube_array=array)
+    #def import_bit_array(self, bit_array):
+    #    color_idx = np.indices((1, 54, 6))[2]
+    #    array = (color_idx * bit_array.reshape((1, 54, 6))).max(axis=2)
+    #    self.internal_state = BatchCube(cube_array=array)
 
     def reset_and_randomize(self, depth):
         self.internal_state = BatchCube(1)
         self.internal_state.randomize(depth)
 
+        self._input_array = self.internal_state.bit_array().reshape((1, 54, 6))
+        if self.history > 1:
+            input_array_history = np.zeros((self.history-1, 54, 6), dtype=int)
+            self._input_array = np.concatenate([self._input_array, input_array_history], axis=0)
+
     def next(self, action):
         next_internal_state = self.internal_state.copy()
         next_internal_state.step(action)
-        return State(next_internal_state)
+
+        next_input_array = next_internal_state.bit_array().reshape((1, 54, 6))
+        if self.history > 1:
+            next_input_array_history = self._input_array.copy()[:-1]
+            next_input_array = np.concatenate([next_input_array, next_input_array_history], axis=0)
+
+        return State(next_internal_state, _input_array=next_input_array, history=self.history)
 
     def input_array(self):
-        return self.internal_state.bit_array().reshape((1, 6*54))
+        return self._input_array
+    
+    def input_array_no_history(self):
+        return self._input_array[0] # just return the newest state
 
     def key(self):
-        return self.internal_state.bit_array().tobytes()
+        return self._input_array.tobytes()
 
     def done(self):
         return self.internal_state.done()[0]

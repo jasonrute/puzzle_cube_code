@@ -5,7 +5,7 @@ parameters) and are basically wrappers around the Keras models.
 from collections import OrderedDict
 import numpy as np
 import time
-from batch_cube import position_permutations, color_permutations, action_permutations
+from batch_cube import BatchCube, position_permutations, color_permutations, action_permutations
 import warnings
 import threading, queue
 
@@ -56,7 +56,7 @@ class BaseModel():
     The Base Class for my models.  Assuming Keras/Tensorflow backend and
     that the input is a bit array representing a single cube (no history).
     """   
-    def __init__(self, use_cache=True, max_cache_size=10000, rotationally_randomize=False):
+    def __init__(self, use_cache=True, max_cache_size=10000, rotationally_randomize=False, history=1):
         self.learning_rate = .001
         self._model = None # Built and/or loaded later
         self._run_count = 0 # used for measuring computation timing
@@ -66,6 +66,7 @@ class BaseModel():
         self.use_cache = use_cache
         self.rotationally_randomize = rotationally_randomize
         self.max_cache_size = max_cache_size
+        self.history = history
 
         # multithreading, batch evaluation support
         self.multithreaded = False
@@ -76,7 +77,7 @@ class BaseModel():
         self._worker_thread = None
 
         # to reimplement for each model.  Leave off the first dimension.
-        self.input_shape = (54, 6)
+        self.input_shape = (54 * self.history, 6)
 
     def set_max_batch_size(self, max_batch_size):
         with self._lock:
@@ -107,12 +108,11 @@ class BaseModel():
         model = None 
         self._build(self, model)
 
-    @staticmethod
-    def process_single_input(input_array):
+    def process_single_input(self, input_array):
         """
         """
         warnings.warn("'BaseModel.process_single_input' should not be used.  The 'process_single_input' method should be reimplemented", stacklevel=2)
-        input_array = input_array.reshape((-1, 54, 6))
+        input_array = input_array.reshape((-1, 54 * self.history, 6))
         return input_array
 
     def _rebuild_function(self):
@@ -238,7 +238,7 @@ class BaseModel():
         """
 
         inputs, outputs_policy, outputs_value = data
-
+        print("AAA done training")
         self._model.fit(x=inputs, 
                         y={'policy_output': outputs_policy, 'value_output': outputs_value}, 
                         epochs=1, verbose=0)
@@ -286,7 +286,7 @@ class BaseModel():
         for state, policy, value in zip(inputs, policies, values):
             cube = BatchCube()
             cube.load_bit_array(state)
-
+            
             if next_state is not None:
                 assert next_state.shape == state.shape
                 assert np.array_equal(next_state, state), "\nstate:\n" + str(state) + "\nnext_state:\n" + str(next_state)
@@ -311,8 +311,8 @@ class BaseModel():
         Don't augment, since this takes up too much space and doesn't cost much in time to
         do it later.
 
-        Also keep the inputs shape as (-1, 54, 6) so that other networks can use the same
-        data.
+        Also keep the inputs shape as (-1, 54, 6) so that other models can use the same
+        data.  Similarly, assume the inputs are stored only with the last state.
         """
         
         # convert to arrays
@@ -322,8 +322,7 @@ class BaseModel():
 
         return inputs, policies, values
 
-    @staticmethod
-    def process_training_data(inputs, policies, values, augment=True):
+    def process_training_data(self, inputs, policies, values, augment=True):
         """
         Convert training data to arrays.  
         Augment data
@@ -335,7 +334,33 @@ class BaseModel():
             inputs, policies, values = augment_data(inputs, policies, values)
 
         # process arrays now to save time during training
-        inputs = inputs.reshape((-1, 54, 6))
+        if history == 1:
+            inputs = inputs.reshape((-1, 54, 6))
+        else:
+            # use that the inputs are in order to attach the history
+            # use the policy/input match to determine when we reached a new game
+            next_cube = None
+            input_array = None
+            input_list = []
+            for state, policy in zip(inputs, policies):
+                cube = BatchCube()
+                cube.load_bit_array(state)
+                
+                if next_cube is None or cube != next_cube:
+                    # blank history
+                    input_array_history = np.zeros((self.history-1, 54, 6), dtype=int)
+                else:
+                    input_array_history = input_array[:-1]
+                
+                input_array_state = state.reshape((1, 54, 6))
+                input_array = np.concatenate([input_array_state, input_array_history], axis=0)
+                input_list.append(input_array.reshape((54 * self.history, 6)))
+                
+                action = np.argmax(policy)
+                next_cube = cube.copy()
+                next_cube.step([action])
+                
+            inputs = np.array(input_list)
 
         return inputs, policies, values
 
@@ -345,8 +370,10 @@ class ConvModel(BaseModel):
     A residual 2D-convolutional model.
     """   
 
-    def __init__(self, use_cache=True, max_cache_size=10000, rotationally_randomize=False):
-        BaseModel.__init__(self, use_cache, max_cache_size, rotationally_randomize)
+    def __init__(self, use_cache=True, max_cache_size=10000, rotationally_randomize=False, history=1):
+        BaseModel.__init__(self, use_cache, max_cache_size, rotationally_randomize, history)
+        assert history == 1, "history > 1 not yet implemented for ConvModel"
+
         self.input_shape = (6 * 6, 3, 3)
 
     def build(self):
@@ -454,14 +481,12 @@ class ConvModel(BaseModel):
 
         self._build(model)
 
-    @staticmethod
-    def process_single_input(input_array):
+    def process_single_input(self, input_array):
         input_array = input_array.reshape((-1, 54, 6))
         input_array = np.rollaxis(input_array, 2, 1).reshape(-1, 6*6, 3, 3)
         return input_array
 
-    @staticmethod
-    def process_training_data(inputs, policies, values, augment=True):
+    def process_training_data(self, inputs, policies, values, augment=True):
         """
         Convert training data to arrays.  
         Augment data
@@ -484,9 +509,9 @@ class ConvModel2D3D(BaseModel):
     A residual 3D convolutional model restricted to the 2D boundary of the cube.
     """   
 
-    def __init__(self, use_cache=True, max_cache_size=10000, rotationally_randomize=False):
-        BaseModel.__init__(self, use_cache, max_cache_size, rotationally_randomize)
-        self.input_shape = (54, 6)
+    def __init__(self, use_cache=True, max_cache_size=10000, rotationally_randomize=False, history=1):
+        BaseModel.__init__(self, use_cache, max_cache_size, rotationally_randomize, history)
+        self.input_shape = (54*self.history, 6)
 
     def build(self):
         """
@@ -588,7 +613,7 @@ class ConvModel2D3D(BaseModel):
             return output
 
         # the network
-        state_input = Input(shape=(54, 6), name='state_input')
+        state_input = Input(shape=self.input_shape, name='state_input')
         
         # convolutional
         block = conv_block(state_input, filter_size=64)
@@ -614,13 +639,11 @@ class ConvModel2D3D(BaseModel):
 
         self._build(model)
 
-    @staticmethod
-    def process_single_input(input_array):
-        input_array = input_array.reshape((-1, 54, 6))
+    def process_single_input(self, input_array):
+        input_array = input_array.reshape((-1, 54 * self.history, 6))
         return input_array
 
-    @staticmethod
-    def process_training_data(inputs, policies, values, augment=True):
+    def process_training_data(self, inputs, policies, values, augment=True):
         """
         Convert training data to arrays.  
         Augment data
@@ -632,7 +655,33 @@ class ConvModel2D3D(BaseModel):
             inputs, policies, values = augment_data(inputs, policies, values)
 
         # process arrays now to save time during training
-        inputs = inputs.reshape((-1, 54, 6))
+        if self.history == 1:
+            inputs = inputs.reshape((-1, 54, 6))
+        else:
+            # use that the inputs are in order to attach the history
+            # use the policy/input match to determine when we reached a new game
+            next_cube = None
+            input_array = None
+            input_list = []
+            for state, policy in zip(inputs, policies):
+                cube = BatchCube()
+                cube.load_bit_array(state)
+                
+                if next_cube is None or cube != next_cube:
+                    # blank history
+                    input_array_history = np.zeros((self.history-1, 54, 6), dtype=int)
+                else:
+                    input_array_history = input_array[:-1]
+                
+                input_array_state = state.reshape((1, 54, 6))
+                input_array = np.concatenate([input_array_state, input_array_history], axis=0)
+                input_list.append(input_array.reshape((54 * self.history, 6)))
+                
+                action = np.argmax(policy)
+                next_cube = cube.copy()
+                next_cube.step([action])
+                
+            inputs = np.array(input_list)
 
         return inputs, policies, values
 

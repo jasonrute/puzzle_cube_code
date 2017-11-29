@@ -104,7 +104,7 @@ class BatchGameAgent():
         game_agent.self_play_stats['total_action_values'].append(mcts.stats('total_action_values'))
 
         # training data (also recorded in stats)
-        game_agent.data_states.append(mcts.initial_node.state.input_array())
+        game_agent.data_states.append(mcts.initial_node.state.input_array_no_history())
         
         policy = mcts.action_probabilities(inv_temp = 10)
         game_agent.data_policies.append(policy)
@@ -187,8 +187,9 @@ class TrainingAgent():
         self.multithreaded = True
 
         # Model (NN) parameters (fixed)
-        self.checkpoint_model = models.ConvModel2D3D() # this doesn't build and/or load the model yet
-        self.best_model = models.ConvModel2D3D()       # this doesn't build and/or load the model yet
+        self.prev_state_history = 8 # the number of previous states (including the current one) used as input to the model
+        self.checkpoint_model = models.ConvModel2D3D(history=self.prev_state_history) # this doesn't build and/or load the model yet
+        self.best_model = models.ConvModel2D3D(history=self.prev_state_history)       # this doesn't build and/or load the model yet
         if self.multithreaded:
             self.checkpoint_model.multithreaded = True
             self.best_model.multithreaded = True
@@ -388,6 +389,7 @@ class TrainingAgent():
             self.validate_training_data = False # just validate for first round
             print("data valid.")
 
+        print("processing...")
         inputs_all, outputs_policy_all, outputs_value_all = \
             self.checkpoint_model.process_training_data(inputs_all, outputs_policy_all, outputs_value_all, augment=True)
 
@@ -479,8 +481,8 @@ class TrainingAgent():
         print("saved data:", "'" + path + "'")
 
     @staticmethod
-    def random_state(distance):
-        state = State()
+    def random_state(distance, history):
+        state = State(history = history)
         while state.done(): 
             state.reset_and_randomize(distance)
         return state
@@ -601,7 +603,7 @@ class TrainingAgent():
             else:
                 distance_level = self.training_distance_level 
             distance = self.random_distance(distance_level)
-            state = self.random_state(distance)
+            state = self.random_state(distance, self.prev_state_history)
 
             print("(DB)", "starting game", self.game_number, "...")
             yield self.game_number, state, distance, distance_level
