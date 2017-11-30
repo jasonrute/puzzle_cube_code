@@ -15,6 +15,7 @@ import os, psutil # useful for memory management
 from datetime import datetime
 
 from mcts_nn_cube import State, MCTSAgent
+from pympler import tracker
 
 # this keeps track of the training runs, including the older versions that we are extending
 VERSIONS = ["v0.9.2.1", "v0.9.2"]
@@ -763,12 +764,18 @@ def main():
     print("\nBegin training loop...")
     agent.reset_self_play()
 
+    tr = tracker.SummaryTracker()
+    tr.print_diff()
+
     while True:
         print("\nBegin self-play data generation...")
         agent.generate_data_self_play()
 
         print("\nSave stats...")
         agent.save_training_stats()
+
+        tr = tracker.SummaryTracker()
+        tr.print_diff()
 
         print("\nSave data...")
         agent.save_training_data()

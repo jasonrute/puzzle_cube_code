@@ -238,10 +238,10 @@ class BaseModel():
         """
 
         inputs, outputs_policy, outputs_value = data
-        print("AAA done training")
         self._model.fit(x=inputs, 
                         y={'policy_output': outputs_policy, 'value_output': outputs_value}, 
                         epochs=1, verbose=0)
+        print("AAA done training")
         self._rebuild_function()
 
     @staticmethod
