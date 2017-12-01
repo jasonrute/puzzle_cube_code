@@ -20,7 +20,7 @@ tr1 = tracker.SummaryTracker()
 tr2 = tracker.SummaryTracker()
 
 # this keeps track of the training runs, including the older versions that we are extending
-VERSIONS = ["v0.9.2.1", "v0.9.2"]
+VERSIONS = ["v0.9.3.1", "v0.9.3"]
 
 # memory management
 MY_PROCESS = psutil.Process(os.getpid())
@@ -191,8 +191,13 @@ class TrainingAgent():
 
         # Model (NN) parameters (fixed)
         self.prev_state_history = 8 # the number of previous states (including the current one) used as input to the model
-        self.checkpoint_model = models.ConvModel2D3D(history=self.prev_state_history) # this doesn't build and/or load the model yet
-        self.best_model = models.ConvModel2D3D(history=self.prev_state_history)       # this doesn't build and/or load the model yet
+        self.use_cache = False
+        self.checkpoint_model = models.ConvModel2D3D(use_cache=self.use_cache, 
+                                                     history=self.prev_state_history, 
+                                                     rotationally_randomize=True) # this doesn't build and/or load the model yet
+        self.best_model = models.ConvModel2D3D(use_cache=self.use_cache,
+                                               history=self.prev_state_history, 
+                                               rotationally_randomize=True)       # this doesn't build and/or load the model yet
         if self.multithreaded:
             self.checkpoint_model.multithreaded = True
             self.best_model.multithreaded = True

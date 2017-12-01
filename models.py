@@ -5,19 +5,25 @@ parameters) and are basically wrappers around the Keras models.
 from collections import OrderedDict
 import numpy as np
 import time
-from batch_cube import BatchCube, position_permutations, color_permutations, action_permutations
+from batch_cube import BatchCube, position_permutations, color_permutations, action_permutations, opp_action_permutations
 import warnings
 import threading, queue
 
 
-def randomize_input(input_array):
-    pos_perm = position_permutations[rotation_id][:,np.newaxis]
-    col_perm = color_permutations[rotation_id][np.newaxis]
-    input_array = input_array[pos_perm, col_perm]
+def randomize_input(input_array, rotation_id):
+    """
+    Randomizes the input, assuming the input has shape (-1, 54, 6)
+    """
+    pos_perm = position_permutations[rotation_id][np.newaxis, :, np.newaxis]
+    col_perm = color_permutations[rotation_id][np.newaxis, np.newaxis]
+    input_array = input_array[:, pos_perm, col_perm]
 
     return input_array
 
-def derandomize_policy(policy):
+def derandomize_policy(policy, rotation_id):
+    """
+    Randomizes the policy, assuming the policy has shape (12, )
+    """
     return policy[opp_action_permutations[rotation_id]]
 
 def augment_data(inputs, policies, values):
@@ -194,7 +200,8 @@ class BaseModel():
 
     def function(self, input_array):
         """
-        The function which computes the output to the array
+        The function which computes the output to the array.
+        Assume input_array has shape (-1, 56, 4) where -1 represents the history.
         """ 
         if self.rotationally_randomize:
             rotation_id = np.random.choice(48)
