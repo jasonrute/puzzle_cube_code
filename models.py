@@ -83,7 +83,7 @@ class BaseModel():
         self._worker_thread = None
 
         # to reimplement for each model.  Leave off the first dimension.
-        self.input_shape = (54 * self.history, 6)
+        self.input_shape = (54, self.history * 6)
 
     def set_max_batch_size(self, max_batch_size):
         with self._lock:
@@ -115,10 +115,11 @@ class BaseModel():
         self._build(self, model)
 
     def process_single_input(self, input_array):
-        """
-        """
         warnings.warn("'BaseModel.process_single_input' should not be used.  The 'process_single_input' method should be reimplemented", stacklevel=2)
-        input_array = input_array.reshape((-1, 54 * self.history, 6))
+        input_array = input_array.reshape((self.history, 54, 6))
+        if self.history > 1:
+            input_array = np.rollaxis(input_array,  1, 0)
+            input_array = input_array.reshape((1, 54, self.history * 6))
         return input_array
 
     def _rebuild_function(self):
@@ -347,7 +348,7 @@ class BaseModel():
             # use that the inputs are in order to attach the history
             # use the policy/input match to determine when we reached a new game
             next_cube = None
-            input_array = None
+            input_array_with_history = None
             input_list = []
             for state, policy in zip(inputs, policies):
                 cube = BatchCube()
@@ -357,11 +358,14 @@ class BaseModel():
                     # blank history
                     input_array_history = np.zeros((self.history-1, 54, 6), dtype=int)
                 else:
-                    input_array_history = input_array[:-1]
+                    input_array_history = input_array_with_history[:-1]
                 
                 input_array_state = state.reshape((1, 54, 6))
-                input_array = np.concatenate([input_array_state, input_array_history], axis=0)
-                input_list.append(input_array.reshape((54 * self.history, 6)))
+                input_array_with_history = np.concatenate([input_array_state, input_array_history], axis=0)
+                
+                input_array = np.rollaxis(input_array_with_history,  1, 0)
+                input_array = input_array.reshape((54, self.history * 6))
+                input_list.append(input_array)
                 
                 action = np.argmax(policy)
                 next_cube = cube.copy()
@@ -518,7 +522,7 @@ class ConvModel2D3D(BaseModel):
 
     def __init__(self, use_cache=True, max_cache_size=10000, rotationally_randomize=False, history=1):
         BaseModel.__init__(self, use_cache, max_cache_size, rotationally_randomize, history)
-        self.input_shape = (54*self.history, 6)
+        self.input_shape = (54, self.history * 6)
 
     def build(self):
         """
@@ -554,13 +558,17 @@ class ConvModel2D3D(BaseModel):
             - reshape to remove last dimension:
                 None (samples) x filter_size x 54
             """ 
+            assert in_tensor.shape[1] == 54, in_tensor.shape
+
             # pad (output dim: None x 55 x ?)
             padded = Lambda(lambda x: K.temporal_padding(x, (0, 1)))(in_tensor) # just pad end
+            assert padded.shape[1] == 55, padded.shape
             
             # align neighbors (output dim: None x 54 x 27 x ?)
             #aligned = K.gather(padded, neighbors)
             #aligned = padded[ neighbors[np.newaxis].astype(np.int32), :]
             aligned = Lambda(lambda x: tf.gather(x, neighbors, axis=1))(padded)
+            assert aligned.shape[1:3] == (54, 27), aligned.shape
             
             # 2D convolution in one axis (output dim: None x 54 x 1 x filter_size)
             conv = Conv2D(filter_size, kernel_size=(1, 27), 
@@ -569,9 +577,11 @@ class ConvModel2D3D(BaseModel):
                           data_format="channels_last",
                           kernel_regularizer=l2(0.001), 
                           bias_regularizer=l2(0.001))(aligned)
+            assert conv.shape[1:3] == (54, 1), conv.shape
 
             # reshape (output dim: None x 54 x filter_size)
             out_tensor = Lambda(lambda x: K.squeeze(x, axis=2))(conv)
+            assert out_tensor.shape[1] == 54, out_tensor.shape
 
             return out_tensor
 
@@ -647,7 +657,10 @@ class ConvModel2D3D(BaseModel):
         self._build(model)
 
     def process_single_input(self, input_array):
-        input_array = input_array.reshape((-1, 54 * self.history, 6))
+        input_array = input_array.reshape((self.history, 54, 6))
+        if self.history > 1:
+            input_array = np.rollaxis(input_array,  1, 0)
+            input_array = input_array.reshape((1, 54, self.history * 6))
         return input_array
 
     def process_training_data(self, inputs, policies, values, augment=True):
@@ -668,7 +681,7 @@ class ConvModel2D3D(BaseModel):
             # use that the inputs are in order to attach the history
             # use the policy/input match to determine when we reached a new game
             next_cube = None
-            input_array = None
+            input_array_with_history = None
             input_list = []
             for state, policy in zip(inputs, policies):
                 cube = BatchCube()
@@ -678,11 +691,14 @@ class ConvModel2D3D(BaseModel):
                     # blank history
                     input_array_history = np.zeros((self.history-1, 54, 6), dtype=int)
                 else:
-                    input_array_history = input_array[:-1]
+                    input_array_history = input_array_with_history[:-1]
                 
                 input_array_state = state.reshape((1, 54, 6))
-                input_array = np.concatenate([input_array_state, input_array_history], axis=0)
-                input_list.append(input_array.reshape((54 * self.history, 6)))
+                input_array_with_history = np.concatenate([input_array_state, input_array_history], axis=0)
+                
+                input_array = np.rollaxis(input_array_with_history,  1, 0)
+                input_array = input_array.reshape((54, self.history * 6))
+                input_list.append(input_array)
                 
                 action = np.argmax(policy)
                 next_cube = cube.copy()
