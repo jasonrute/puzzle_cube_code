@@ -15,12 +15,12 @@ import os, psutil # useful for memory management
 from datetime import datetime
 
 from mcts_nn_cube import State, MCTSAgent
-from pympler import tracker
-tr1 = tracker.SummaryTracker()
-tr2 = tracker.SummaryTracker()
+#from pympler import tracker
+#tr1 = tracker.SummaryTracker()
+#tr2 = tracker.SummaryTracker()
 
 # this keeps track of the training runs, including the older versions that we are extending
-VERSIONS = ["v0.9.3.1", "v0.9.3"]
+VERSIONS = ["v0.9.4.crash"]
 
 # memory management
 MY_PROCESS = psutil.Process(os.getpid())
@@ -771,51 +771,51 @@ def main():
     print("\nBegin training loop...")
     agent.reset_self_play()
 
-    print("BBB", "tr1:")
-    tr1.print_diff()
-    print("BBB", "tr2:")
-    tr2.print_diff()
+    #print("BBB", "tr1:")
+    #tr1.print_diff()
+    #print("BBB", "tr2:")
+    #tr2.print_diff()
 
     while True:
         print("\nBegin self-play data generation...")
         agent.generate_data_self_play()
 
-        print("BBB", "tr2:")
-        tr2.print_diff()
+        #print("BBB", "tr2:")
+        #tr2.print_diff()
 
         print("\nSave stats...")
         agent.save_training_stats()
 
-        print("BBB", "tr1:")
-        tr1.print_diff()
-        print("BBB", "tr2:")
-        tr2.print_diff()
+        #print("BBB", "tr1:")
+        #tr1.print_diff()
+        #print("BBB", "tr2:")
+        #tr2.print_diff()
 
         print("\nSave data...")
         agent.save_training_data()
 
-        print("BBB", "tr2:")
-        tr2.print_diff()
+        #print("BBB", "tr2:")
+        #tr2.print_diff()
 
         agent.generation += 1
 
         print("\nTrain model...")
         agent.train_model()
 
-        print("BBB", "tr2:")
-        tr2.print_diff()
+        #print("BBB", "tr2:")
+        #tr2.print_diff()
 
         print("\nSave model...")
         agent.save_checkpoint_model()   
 
-        print("BBB", "tr2:")
-        tr2.print_diff()
+        #print("BBB", "tr2:")
+        #tr2.print_diff()
 
         print("\nBegin evaluation...")
         agent.evaluate_and_choose_best_model()
 
-        print("BBB", "tr2:")
-        tr2.print_diff()
+        #print("BBB", "tr2:")
+        #tr2.print_diff()
         
 if __name__ == '__main__':
     try:
