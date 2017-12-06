@@ -21,7 +21,7 @@ from mcts_nn_cube import State, MCTSAgent
 #tr2 = tracker.SummaryTracker()
 
 # this keeps track of the training runs, including the older versions that we are extending
-PREV_VERSIONS = ['v0.9.dev8.hist8'] # fill in manually
+PREV_VERSIONS = ['v0.9.4.crash'] # fill in manually
 CURRENT_VERSION = git.Git().describe('--match', 'v?.*', '--match', 'v??.*', '--match', 'v???.*', '--dirty')
 VERSIONS = [CURRENT_VERSION] + PREV_VERSIONS
 
