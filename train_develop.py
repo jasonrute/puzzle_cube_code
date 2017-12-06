@@ -11,8 +11,9 @@ import numpy as np
 from collections import defaultdict, deque, Counter, namedtuple
 import itertools
 import warnings
-import os, psutil # useful for memory management
+import os, pathlib, psutil # useful for memory management
 from datetime import datetime
+import git # for keeping track of git versions
 
 from mcts_nn_cube import State, MCTSAgent
 #from pympler import tracker
@@ -20,7 +21,14 @@ from mcts_nn_cube import State, MCTSAgent
 #tr2 = tracker.SummaryTracker()
 
 # this keeps track of the training runs, including the older versions that we are extending
-VERSIONS = ["v0.9.4.crash"]
+CURRENT_VERSION = git.Git().describe('--match', 'v?.*', '--match', 'v??.*', '--match', 'v???.*', )
+VERSIONS = [CURRENT_VERSION] + []
+
+# create results directory including directory corresponing to current version
+RESULTS_DIR = pathlib.Path('../results/')
+SAVE_DIR = pathlib.Path('../save/') # for backwards compatibility
+CURRENT_VERSION_DIR = RESULTS_DIR.joinpath(CURRENT_VERSION)
+CURRENT_VERSION_DIR.mkdir(parents=True, exist_ok=True) # make ../results/<current_version> directory (and parent dir) if it doesn't exist
 
 # memory management
 MY_PROCESS = psutil.Process(os.getpid())
@@ -265,6 +273,31 @@ class TrainingAgent():
         self.checkpoint_model.build()
         self.best_model.build()
 
+    def filepaths_by_generation(self, filetype, version):
+        # pattern
+        glob_pattern = '{}_{}_gen*.h5'.format(filetype, version)
+
+        # first check new saving scheme: ../results/<version>/filename
+        version_dir = RESULTS_DIR.joinpath(version)
+
+        if not version_dir.exists():
+            # try ../save/filename for backwards compatibility
+            version_dir = SAVE_DIR
+
+        if not version_dir.exits():
+            return [] # no files found
+        
+        file_paths = version_dir.glob(glob_pattern)
+
+        # sort by generation
+        gen_paths = sorted([(int(str_between(str(f), "_gen", ".h5")), f) for f in file_paths])
+        
+        return gen_paths
+
+    def new_filepath(self, filetype):
+        file_name = "{}_{}_gen{:03}.h5".format(filetype, VERSIONS[0], self.generation)
+        return CURRENT_VERSION_DIR.join(file_name)
+
     def load_transposition_table(self):
         #TODO: Add this.  For now, just use empty table.
 
@@ -282,20 +315,17 @@ class TrainingAgent():
         # load checkpoint model
         
         for version in VERSIONS:
-            model_files = [f for f in os.listdir('./save/') 
-                                 if f.startswith("checkpoint_model_{}_gen".format(version))
-                                 and f.endswith(".h5")]
+            model_files = self.filepaths_by_generation('checkpoint_model', version)
+
             if model_files:
                 # choose newest generation
-                model_file = max(model_files, 
-                                      key=lambda f: str_between(f, "_gen", ".h5"))
-                path = "./save/" + model_file
+                gen, path = model_files[-1]
                 
-                print("checkpoint model found:", "'" + path + "'")
+                print("checkpoint model found: '{}'".format(path))
                 print("loading model ...")
                 self.checkpoint_model.load_from_file(path)
 
-                self.generation = int(str_between(path, "_gen", ".h5"))
+                self.generation = gen
                 break
 
             else:
@@ -305,20 +335,17 @@ class TrainingAgent():
 
         # load best model
         for version in VERSIONS:
-            model_files = [f for f in os.listdir('./save/') 
-                                 if f.startswith("model_{}_gen".format(version))
-                                 and f.endswith(".h5")]
+            model_files = self.filepaths_by_generation('model', version)
+
             if model_files:
                 # choose newest generation
-                model_file = max(model_files, 
-                                      key=lambda f: (str_between(f, "_gen", ".h5")))
-                path = "./save/" + model_file
+                gen, path = model_files[-1]
                 
-                print("best model found:", "'" + path + "'")
+                print("best model found: '{}'".format(path))
                 print("loading model ...")
                 self.best_model.load_from_file(path)
 
-                self.best_generation = int(str_between(path, "_gen", ".h5"))
+                self.best_generation = gen
                 break
 
             else:
@@ -327,10 +354,9 @@ class TrainingAgent():
         print("best generation:", self.best_generation)
 
     def save_checkpoint_model(self):
-        file_name = "checkpoint_model_{}_gen{:03}.h5".format(VERSIONS[0], self.generation)
-        path = "./save/" + file_name
+        path = self.new_filepath('checkpoint_model')
         self.checkpoint_model.save_to_file(path)
-        print("saved model checkpoint:", "'" + path + "'")
+        print("saved model checkpoint: '{}'".format(path))
 
         self.checkpoint_training_distance_level = self.training_distance_level
         self.checkpoint_recent_wins = Counter()
@@ -341,10 +367,9 @@ class TrainingAgent():
             self.checkpoint_recent_wins[dist] += 1
 
     def save_and_set_best_model(self):
-        file_name = "model_{}_gen{:03}.h5".format(VERSIONS[0], self.generation)
-        path = "./save/" + file_name
+        path = self.new_filepath('model')
         self.checkpoint_model.save_to_file(path)
-        print("saved model:", "'" + path + "'")
+        print("saved model: '{}'".format(path))
 
         self.best_model.load_from_file(path)
 
@@ -366,19 +391,14 @@ class TrainingAgent():
             if counter > self.prev_generations_used_for_training:
                 break
 
-            data_files = [(str_between(f, "_gen", ".h5"), f)
-                                for f in os.listdir('./save/') 
-                                if f.startswith("data_{}_gen".format(version))
-                                and f.endswith(".h5")]
+            data_files = self.filepaths_by_generation('data', version)
             
             # go through in reverse order
-            for gen, f in reversed(sorted(data_files)):
+            for gen, path in reversed(data_files):
                 if counter > self.prev_generations_used_for_training:
                     break
-                
-                path = "./save/" + f
 
-                print("loading data:", "'" + path + "'")
+                print("loading data: '{}'".format(path))
 
                 with h5py.File(path, 'r') as hf:
                     inputs_list.append(hf['inputs'][:])
@@ -435,8 +455,7 @@ class TrainingAgent():
     def save_training_stats(self):
         import pandas as pd
 
-        file_name = "stats_{}_gen{:03}.h5".format(VERSIONS[0], self.generation)
-        path = "./save/" + file_name
+        path = self.new_filepath('stats')
 
         # record time of end of self-play
         self.self_play_end = datetime.utcnow()
@@ -468,8 +487,7 @@ class TrainingAgent():
         # save training_data
         import h5py
 
-        file_name = "data_{}_gen{:03}.h5".format(VERSIONS[0], self.generation)
-        path = "./save/" + file_name
+        path = self.new_filepath('data')
 
         inputs, outputs_policy, outputs_value = \
             self.best_model.preprocess_training_data(self.training_data_states,
@@ -486,7 +504,7 @@ class TrainingAgent():
             hf.create_dataset("outputs_policy",  data=outputs_policy)
             hf.create_dataset("outputs_value",  data=outputs_value)
 
-        print("saved data:", "'" + path + "'")
+        print("saved data: '{}'".format(path))
 
     @staticmethod
     def random_state(distance, history):
