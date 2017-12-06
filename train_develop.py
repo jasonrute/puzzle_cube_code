@@ -768,7 +768,7 @@ class TrainingAgent():
         print("Best model      : {:2} / {:2} / {:2}".format(best_model_wins, checkpoint_model_wins, ties))
         print("Checkpoint model: {:2} / {:2} / {:2}".format(checkpoint_model_wins, best_model_wins, ties))
         
-        if checkpoint_model_wins - best_model_wins > 5:
+        if True or checkpoint_model_wins - best_model_wins > 5:
             print("\nCheckpoint model is better.")
             print("\nSave and set as best model...")
             self.save_and_set_best_model()
