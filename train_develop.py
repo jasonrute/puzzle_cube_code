@@ -22,7 +22,7 @@ from mcts_nn_cube import State, MCTSAgent
 
 # this keeps track of the training runs, including the older versions that we are extending
 PREV_VERSIONS = [] # fill in manually
-CURRENT_VERSION = git.Git().describe('--match', 'v?.*', '--match', 'v??.*', '--match', 'v???.*', )
+CURRENT_VERSION = git.Git().describe('--match', 'v?.*', '--match', 'v??.*', '--match', 'v???.*', '--dirty')
 VERSIONS = [CURRENT_VERSION] + PREV_VERSIONS
 
 # create results directory including directory corresponing to current version
