@@ -22,7 +22,7 @@ from mcts_nn_cube import State, MCTSAgent
 
 # this keeps track of the training runs, including the older versions that we are extending
 PREV_VERSIONS = [] # fill in manually
-CURRENT_VERSION = git.Git().describe('--match', 'v?.*', '--match', 'v??.*', '--match', 'v???.*', )
+CURRENT_VERSION = git.Git().describe('--match', 'v?.*', '--match', 'v??.*', '--match', 'v???.*', '--dirty')
 VERSIONS = [CURRENT_VERSION] + PREV_VERSIONS
 
 # create results directory including directory corresponing to current version
@@ -285,7 +285,7 @@ class TrainingAgent():
             # try ../save/filename for backwards compatibility
             version_dir = SAVE_DIR
 
-        if not version_dir.exits():
+        if not version_dir.exists():
             return [] # no files found
         
         file_paths = version_dir.glob(glob_pattern)
@@ -297,7 +297,7 @@ class TrainingAgent():
 
     def new_filepath(self, filetype):
         file_name = "{}_{}_gen{:03}.h5".format(filetype, VERSIONS[0], self.generation)
-        return CURRENT_VERSION_DIR.join(file_name)
+        return CURRENT_VERSION_DIR.joinpath(file_name)
 
     def load_transposition_table(self):
         #TODO: Add this.  For now, just use empty table.
@@ -482,7 +482,7 @@ class TrainingAgent():
         self_play_stats_df = pd.DataFrame(data=self.self_play_stats)
         self_play_stats_df.to_hdf(path, 'self_play_stats', mode='a', format='fixed') #use mode='a' to avoid overwriting
 
-        print("saved stats:", "'" + path + "'")
+        print("saved stats: '{}'".format(path))
 
     def save_training_data(self):
         # save training_data
