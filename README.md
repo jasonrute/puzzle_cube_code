@@ -91,7 +91,7 @@ little or no domain knowledge.
 - [x] Dump previous code into Git repository
 - [x] Fix Cube action order to make standardized
 - [x] Generate and save data for early states
-- [ ] Fix memory leak (may need to use processes)
+- [x] Fix memory leak (may need to use processes)
 - [ ] Improve MCTS algorithm
 	- [x] Add dirichlet noise like in AlphaGo paper (maybe alpha = .75 since there are so few actions)
 	- [ ] Record when we get to solution and then set the max_depth to be that value
@@ -99,8 +99,49 @@ little or no domain knowledge.
 - [x] Develop outline of a better training process
 	- [x] Make training file
 	- [ ] Split off components of the training process into their own files as it makes sense
+- [ ] Fix generation off by one error.  The generation 0 model is the base model and the generation 1 model is the model is the one that comes from generation 1 data.
+- [ ] Simple improvements to make training process more like AlphaGos
+	- [x] Set inv_temp to 10 to focus on exact probabilities
+	- [x] Move win rate goal to .5
+	- [x] Make a version list to add ability to go back many versions
+		- [x] Save version list to stats
+	- [x] Train using training data from previous 10 generations
+		- [x] Store data during self-play
+		- [x] Save data to a file (don't save state in the same table)
+		- [x] Load data from 10 generations worth of files during training
+		- [x] Choose 1024 data points at random
+	- [x] Adjust difficulty using last 100 games
+		- [x] Store last 100 game results (with deque with max size)
+		- [x] Every 10 games, adjust difficulty up or down
+	- [ ] Speed up with a transposition table
+	- [ ] Create an evaluation method
+		- [ ] Have best_model and current_model
+		- [ ] Load both at beginning using score
+		- [ ] Play using best_model
+		- [ ] Train the current_model
+		- [ ] For every new model, run it against the best_model
+	- [ ] Use color/side/action symmetry
+		- [ ] Compute 36 symmetries: 6 options for R, 3 options for Y, 2 for G
+		- [ ] Change computation of policy/value to use these symmetries
+
 - [ ] Improve adaptive difficulty algorithm
+	- [ ] Use last 100 games (including from previous run) (use a fixed number prevents a moving target)
+	- [ ] Only adjust difficulty every 10 moves
+	- [ ] If 5% > goal increase, if 5% < goal decrease
+- [ ] Develop a evaluation algorithm
+	- [ ] Simple idea:
+		- [ ] Play 100 games against best network (both try to solve same cube)
+			- [ ] If both win, increase difficulty
+			- [ ] If both lose, decrease difficulty
+		- [ ] Remove those from the training data
+		- [ ] Remove those from the training data
 - [ ] Find adaptive method to set exploration constant c_puct
+- [ ] Use more of the previous runs for training data.
+	- [ ] How AlphaGo works:
+		- [ ] Samples 2,048 moves at uniform from previous 500,000 games (500 checkpoints worth)
+		- [ ] It plays 1,000 games per checkpoint
+		- [ ] The checkpoints are evaluated to decide the the best opponent
+		- [ ] That opponent is selected to be the best
 - [ ] Fix statistics
 	- [ ] Fix numbering in one of the statistics
 	- [ ] Find better way to store arrays in a data frame
