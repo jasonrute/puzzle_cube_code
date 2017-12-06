@@ -342,7 +342,7 @@ class BaseModel():
             inputs, policies, values = augment_data(inputs, policies, values)
 
         # process arrays now to save time during training
-        if history == 1:
+        if self.history == 1:
             inputs = inputs.reshape((-1, 54, 6))
         else:
             # use that the inputs are in order to attach the history
