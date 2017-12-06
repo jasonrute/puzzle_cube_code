@@ -225,14 +225,14 @@ class TrainingAgent():
 
         # Training parameters (fixed)
         self.batch_size = 32
-        self.games_per_generation = 512
+        self.games_per_generation = 2 #512
         self.starting_distance = 1
         self.min_distance = 1
         self.win_rate_target = .5
         self.max_game_length = 100
         self.prev_generations_used_for_training = 8
         self.training_sample_ratio = 1/self.prev_generations_used_for_training
-        self.games_per_evaluation = 128
+        self.games_per_evaluation = 1 #128
 
         # Training parameters preserved between generations
         self.training_distance_level = float(self.starting_distance)
