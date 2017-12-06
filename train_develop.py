@@ -21,7 +21,7 @@ from mcts_nn_cube import State, MCTSAgent
 #tr2 = tracker.SummaryTracker()
 
 # this keeps track of the training runs, including the older versions that we are extending
-PREV_VERSIONS = ['v0.9.4.crash'] # fill in manually
+PREV_VERSIONS = [] # fill in manually
 CURRENT_VERSION = git.Git().describe('--match', 'v?.*', '--match', 'v??.*', '--match', 'v???.*', '--dirty')
 VERSIONS = [CURRENT_VERSION] + PREV_VERSIONS
 
@@ -225,14 +225,14 @@ class TrainingAgent():
 
         # Training parameters (fixed)
         self.batch_size = 32
-        self.games_per_generation = 2 #512
+        self.games_per_generation = 512
         self.starting_distance = 1
         self.min_distance = 1
         self.win_rate_target = .5
         self.max_game_length = 100
         self.prev_generations_used_for_training = 8
         self.training_sample_ratio = 1/self.prev_generations_used_for_training
-        self.games_per_evaluation = 1 #128
+        self.games_per_evaluation = 128
 
         # Training parameters preserved between generations
         self.training_distance_level = float(self.starting_distance)
@@ -768,7 +768,7 @@ class TrainingAgent():
         print("Best model      : {:2} / {:2} / {:2}".format(best_model_wins, checkpoint_model_wins, ties))
         print("Checkpoint model: {:2} / {:2} / {:2}".format(checkpoint_model_wins, best_model_wins, ties))
         
-        if True or checkpoint_model_wins - best_model_wins > 5:
+        if checkpoint_model_wins - best_model_wins > 5:
             print("\nCheckpoint model is better.")
             print("\nSave and set as best model...")
             self.save_and_set_best_model()
