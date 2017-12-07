@@ -93,7 +93,7 @@ class MCTSNode():
         # check transposition table
         next_state = self.state.next(action)
         key = next_state.key()
-        if key in mcts_agent.transposition_table:
+        if mcts_agent.transposition_table is not None and key in mcts_agent.transposition_table:
             node = mcts_agent.transposition_table[key]
             self.children[action] = node
             return node
@@ -101,7 +101,8 @@ class MCTSNode():
         # create new node
         new_node = MCTSNode(mcts_agent, next_state)
         self.children[action] = new_node
-        mcts_agent.transposition_table[key] = new_node
+        if mcts_agent.transposition_table is not None:
+            mcts_agent.transposition_table[key] = new_node
         return new_node
 
     def select_leaf_and_update(self, mcts_agent, max_depth):

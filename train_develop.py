@@ -77,7 +77,7 @@ class BatchGameAgent():
             mcts = MCTSAgent(self.model.function, 
                              state, 
                              max_depth = self.max_depth, 
-                             transposition_table = self.transposition_table.copy(),
+                             transposition_table = self.transposition_table.copy() if self.transposition_table is not None else None
                              c_puct = self.exploration,
                              gamma = self.decay)
             
@@ -218,6 +218,7 @@ class TrainingAgent():
         self.max_depth = 900
         self.max_steps = 1600
         self.use_prebuilt_transposition_table = False
+        self.use_transposition_table = True if self.prev_state_history == 1 else False
         self.decay = 0.95 # gamma
         self.exploration = 1. #c_puct
         self.prebuilt_transposition_table = None # built later
@@ -306,7 +307,10 @@ class TrainingAgent():
 
         warnings.warn("load_transposition_table is not properly implemented", stacklevel=2)
 
-        self.prebuilt_transposition_table = {}
+        if self.use_transposition_table:
+            self.prebuilt_transposition_table = {}
+        else:
+            self.prebuilt_transposition_table = None
 
     def load_models(self):
         """ 
