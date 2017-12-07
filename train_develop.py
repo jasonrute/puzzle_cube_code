@@ -73,7 +73,7 @@ class BatchGameAgent():
     def append_states(self, state_info_iter):
         for game_id, state, distance, distance_level in state_info_iter:
             mcts = MCTSAgent(self.model.function, 
-                             state.copy(), 
+                             state, 
                              max_depth = self.max_depth, 
                              transposition_table = self.transposition_table.copy(),
                              c_puct = self.exploration,
@@ -509,9 +509,9 @@ class TrainingAgent():
 
     @staticmethod
     def random_state(distance, history):
-        state = State(random_dist = distance, history = history)
+        state = State(random_depth = distance, history = history)
         while state.done(): 
-            state = State(random_dist = distance, history = history)
+            state = State(random_depth = distance, history = history)
         return state
 
     @staticmethod

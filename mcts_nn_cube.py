@@ -29,7 +29,7 @@ class State():
     #def copy(self):
     #    return State(_internal_state = self.internal_state)
 
-    def next(self, action)
+    def next(self, action):
         next_cube = self._internal_state[0].copy()
         next_cube.step(action)
         
