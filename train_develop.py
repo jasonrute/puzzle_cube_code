@@ -29,8 +29,10 @@ VERSIONS = [CURRENT_VERSION] + PREV_VERSIONS
 RESULTS_DIR = pathlib.Path('../results/')
 SAVE_DIR = pathlib.Path('../save/') # for backwards compatibility
 CURRENT_VERSION_DIR = RESULTS_DIR.joinpath(CURRENT_VERSION)
-CURRENT_VERSION_DIR.mkdir(parents=True, exist_ok=True) # make ../results/<current_version> directory (and parent dir) if it doesn't exist
-
+try:
+    CURRENT_VERSION_DIR.mkdir(parents=True) # make ../results/<current_version> directory (and parent dir) if it doesn't exist
+except FileExistsError:
+    pass
 # memory management
 MY_PROCESS = psutil.Process(os.getpid())
 def memory_used():
