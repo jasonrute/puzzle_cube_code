@@ -509,9 +509,9 @@ class TrainingAgent():
 
     @staticmethod
     def random_state(distance, history):
-        state = State(history = history)
+        state = State(random_dist = distance, history = history)
         while state.done(): 
-            state.reset_and_randomize(distance)
+            state = State(random_dist = distance, history = history)
         return state
 
     @staticmethod

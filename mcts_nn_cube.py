@@ -8,64 +8,63 @@ constant_value = .01
 max_depth_value = 0.0
 
 class State():
-    """ This is application specfic """
-    def __init__(self, internal_state=None, _input_array=None, history=1):
-        self.history = history
+    """ 
+    This is application specfic.
+    This State object should be treated as immutable.
+    We do not store the key, the input array, or a *copy* of the history since 
+    that puts too much load on the memory (and the bottleneck in speed is the 
+    neural network, not the tree search).
+    """
+    def __init__(self, history=1, random_depth=None, _internal_state=None):
+        if _internal_state is not None:
+            self._internal_state = _internal_state
+        else:
+            blank_history = tuple(None for _ in range(history-1))
+            cube = BatchCube(1)
+            if random_depth is not None:
+                cube.randomize(random_depth)
+            self._internal_state = (cube, ) + blank_history
 
-        self.internal_state = internal_state
-        if self.internal_state is None:
-            self.internal_state = BatchCube(1)
+    # no need for a copy since State is essentially immutable
+    #def copy(self):
+    #    return State(_internal_state = self.internal_state)
 
-        self._input_array = _input_array
-        if self._input_array is None:
-            # dimensions = (history, squares, colors)
-            self._input_array = self.internal_state.bit_array().reshape((1, 54, 6))
-            if self.history > 1:
-                input_array_history = np.zeros((self.history-1, 54, 6), dtype=int)
-                self._input_array = np.concatenate([self._input_array, input_array_history], axis=0)
+    def next(self, action)
+        next_cube = self._internal_state[0].copy()
+        next_cube.step(action)
+        
+        # to save memory, don't copy history 
+        next_internal_state = (next_cube, ) + self._internal_state[:-1]
 
-    def copy(self):
-        return State(self.internal_state.copy(), _input_array=self._input_array.copy(), history=self.history)
-
-    #def import_bit_array(self, bit_array):
-    #    color_idx = np.indices((1, 54, 6))[2]
-    #    array = (color_idx * bit_array.reshape((1, 54, 6))).max(axis=2)
-    #    self.internal_state = BatchCube(cube_array=array)
-
-    def reset_and_randomize(self, depth):
-        self.internal_state = BatchCube(1)
-        self.internal_state.randomize(depth)
-
-        self._input_array = self.internal_state.bit_array().reshape((1, 54, 6))
-        if self.history > 1:
-            input_array_history = np.zeros((self.history-1, 54, 6), dtype=int)
-            self._input_array = np.concatenate([self._input_array, input_array_history], axis=0)
-
-    def next(self, action):
-        next_internal_state = self.internal_state.copy()
-        next_internal_state.step(action)
-
-        next_input_array = next_internal_state.bit_array().reshape((1, 54, 6))
-        if self.history > 1:
-            next_input_array_history = self._input_array.copy()[:-1]
-            next_input_array = np.concatenate([next_input_array, next_input_array_history], axis=0)
-
-        return State(next_internal_state, _input_array=next_input_array, history=self.history)
+        return State(_internal_state=next_internal_state)
 
     def input_array(self):
-        return self._input_array
+        bit_arrays = []
+        for c in self._internal_state:
+            if c is None:
+                bit_array = np.zeros((1, 54, 6), dtype=bool)
+            else:
+                bit_array = c.bit_array().reshape((1, 54, 6))
+            bit_arrays.append(bit_array)
+        
+        return np.concatenate(bit_arrays, axis=0)
     
     def input_array_no_history(self):
-        return self._input_array[0] # just return the newest state
+        """
+        Just return the newest state
+        """
+        bit_array = self._internal_state[0].bit_array().reshape((1, 54, 6))
+        return bit_array 
 
     def key(self):
-        return self._input_array.tobytes()
+        return self.input_array().tobytes()
 
     def done(self):
-        return self.internal_state.done()[0]
+        cube = self._internal_state[0]
+        return cube.done()[0]
 
     def __str__(self):
-        return str(self.internal_state)
+        return str(self._internal_state)
 
 class MCTSNode():
     def __init__(self, mcts_agent, state):
