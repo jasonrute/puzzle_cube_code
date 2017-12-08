@@ -356,7 +356,7 @@ class BaseModel():
                 
                 if next_cube is None or cube != next_cube:
                     # blank history
-                    input_array_history = np.zeros((self.history-1, 54, 6), dtype=int)
+                    input_array_history = np.zeros((self.history-1, 54, 6), dtype=bool)
                 else:
                     input_array_history = input_array_with_history[:-1]
                 
@@ -689,7 +689,7 @@ class ConvModel2D3D(BaseModel):
                 
                 if next_cube is None or cube != next_cube:
                     # blank history
-                    input_array_history = np.zeros((self.history-1, 54, 6), dtype=int)
+                    input_array_history = np.zeros((self.history-1, 54, 6), dtype=bool)
                 else:
                     input_array_history = input_array_with_history[:-1]
                 
