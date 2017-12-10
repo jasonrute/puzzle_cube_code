@@ -59,11 +59,12 @@ class BatchGameAgent():
     """
     Handles the steps of the games, including batch games.
     """
-    def __init__(self, model, max_steps, max_depth, max_game_length, transposition_table, decay, exploration):
+    def __init__(self, model, max_steps, max_depth, min_game_length, max_game_length, transposition_table, decay, exploration):
         self.game_agents = deque()
         self.model = model
         self.max_depth = max_depth
         self.max_steps = max_steps
+        self.min_game_length = min_game_length
         self.max_game_length = max_game_length
         self.transposition_table = transposition_table
         self.exploration = exploration
@@ -131,7 +132,7 @@ class BatchGameAgent():
         game_agent.counter += 1 
         #if shortest_path < 0:
         #    print("(DB) no path")
-        if (game_agent.counter > 1 and shortest_path < 0) or game_agent.counter >= self.max_game_length:
+        if (game_agent.counter >= self.min_game_length and shortest_path < 0) or game_agent.counter >= self.max_game_length:
             game_agent.win = False
             game_agent.done = True
         else:
@@ -184,6 +185,7 @@ class BatchGameAgent():
                 game_agent.game_stats['_game_id'].append(game_agent.game_id)
                 game_agent.game_stats['distance_level'].append(game_agent.distance_level)
                 game_agent.game_stats['training_distance'].append(game_agent.distance)
+                game_agent.game_stats['min_game_length'].append(self.min_game_length)
                 game_agent.game_stats['max_game_length'].append(self.max_game_length)
                 game_agent.game_stats['win'].append(game_agent.win)
                 game_agent.game_stats['total_steps'].append(game_agent.counter if game_agent.win else -1)
@@ -232,6 +234,7 @@ class TrainingAgent():
         self.starting_distance = 1
         self.min_distance = 1
         self.win_rate_target = .5
+        self.min_game_length = max(2, self.prev_state_history)
         self.max_game_length = 100
         self.prev_generations_used_for_training = 8
         self.training_sample_ratio = 1/self.prev_generations_used_for_training
@@ -654,6 +657,7 @@ class TrainingAgent():
         batch_game_agent = BatchGameAgent(model=model,
                                           max_steps=self.max_steps, 
                                           max_depth=self.max_depth,
+                                          min_game_length=self.min_game_length, 
                                           max_game_length=self.max_game_length, 
                                           transposition_table=self.prebuilt_transposition_table,
                                           decay=self.decay, 
