@@ -77,7 +77,7 @@ class BatchGameAgent():
             mcts = MCTSAgent(self.model.function, 
                              state, 
                              max_depth = self.max_depth, 
-                             transposition_table = self.transposition_table.copy() if self.transposition_table is not None else None
+                             transposition_table = self.transposition_table.copy() if self.transposition_table is not None else None,
                              c_puct = self.exploration,
                              gamma = self.decay)
             
