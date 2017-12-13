@@ -21,7 +21,7 @@ from mcts_nn_cube import State, MCTSAgent
 #tr2 = tracker.SummaryTracker()
 
 # this keeps track of the training runs, including the older versions that we are extending
-PREV_VERSIONS = [] # fill in manually
+PREV_VERSIONS = ['v1.0.2-r'] # fill in manually
 CURRENT_VERSION = git.Git().describe('--match', 'v?.*', '--match', 'v??.*', '--match', 'v???.*', '--dirty')
 VERSIONS = [CURRENT_VERSION] + PREV_VERSIONS
 
@@ -233,7 +233,7 @@ class TrainingAgent():
         self.games_per_generation = 512
         self.starting_distance = 1
         self.min_distance = 1
-        self.win_rate_target = .5
+        self.win_rate_target = .9
         self.min_game_length = max(2, self.prev_state_history)
         self.max_game_length = 100
         self.prev_generations_used_for_training = 8
