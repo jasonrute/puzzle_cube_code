@@ -37,7 +37,7 @@ prev_state_history = 1
 
 # Whether to randomly rotate the input before calculating the neural network
 # (There 48 color symmetries: 6 ways to rotate red face * 4 ways to rotate green face * 2 refections of yellow face = 48)
-rotationally_randomize = True
+rotationally_randomize = False
 
 # Whether to use a dictionary cache (with a max capacity) to speed up the neural network
 use_cache = True if prev_state_history == 1 else False
@@ -126,7 +126,7 @@ exploration = 1.0
 decay = 0.95
 
 # Dirichlet noise add to root node of MCTS to encourage exploration (default alpha is 1/12)
-dirichlet_const = 1/12  # alpha (set to None if not using Dirichlet noise)
+dirichlet_const = None #1/12  # alpha (set to None if not using Dirichlet noise)
 
 # maximum depth to explore (usually never reached)
 max_depth = 900
