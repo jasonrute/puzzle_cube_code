@@ -16,23 +16,26 @@ from datetime import datetime
 import git # for keeping track of git versions
 
 from mcts_nn_cube import State, MCTSAgent
+import models
 #from pympler import tracker
 #tr1 = tracker.SummaryTracker()
 #tr2 = tracker.SummaryTracker()
 
-# this keeps track of the training runs, including the older versions that we are extending
-PREV_VERSIONS = ['v1.0.2-r'] # fill in manually
-CURRENT_VERSION = git.Git().describe('--match', 'v?.*', '--match', 'v??.*', '--match', 'v???.*', '--dirty')
-VERSIONS = [CURRENT_VERSION] + PREV_VERSIONS
+def get_current_version():
+    return git.Git().describe('--match', 'v?.*', '--match', 'v??.*', '--match', 'v???.*', '--dirty')
 
-# create results directory including directory corresponing to current version
-RESULTS_DIR = pathlib.Path('../results/')
-SAVE_DIR = pathlib.Path('../save/') # for backwards compatibility
-CURRENT_VERSION_DIR = RESULTS_DIR.joinpath(CURRENT_VERSION)
-try:
-    CURRENT_VERSION_DIR.mkdir(parents=True) # make ../results/<current_version> directory (and parent dir) if it doesn't exist
-except FileExistsError:
-    pass
+def create_directory(dir_path):
+    """
+    dir_path is a pathlib.Path object
+
+    Creates a directory, including parents.  If the directory exists, do nothing.
+    """
+    try:
+        dir_path.mkdir(parents=True) # make ../results/<current_version> directory (and parent dir) if it doesn't exist
+    except FileExistsError:
+        pass
+
+
 # memory management
 MY_PROCESS = psutil.Process(os.getpid())
 def memory_used():
@@ -196,49 +199,61 @@ class TrainingAgent():
     """
     This agent handles all the details of the training.
     """
-    def __init__(self):
-        import models 
+    def __init__(self, config):
+        """
+        Takes as input a config module with common settings.
+        """
+
+        # Versions and Directories
+        self.current_version = get_current_version()
+        self.versions = [self.current_version] + config.prev_versions
+        
+        self.current_version_dir = pathlib.Path(config.results_dir).joinpath(self.current_version)
+        create_directory(self.current_version_dir) # create directory if it doesn't exist
+        
+        self.save_dir = pathlib.Path(config.save_dir) # for backwards compatibility
 
         # Threading
-        self.multithreaded = True
+        self.multithreaded = config.multithreaded
 
         # Model (NN) parameters (fixed)
-        self.prev_state_history = 8 # the number of previous states (including the current one) used as input to the model
-        self.use_cache = False
-        self.checkpoint_model = models.ConvModel2D3D(use_cache=self.use_cache, 
-                                                     history=self.prev_state_history, 
-                                                     rotationally_randomize=True) # this doesn't build and/or load the model yet
-        self.best_model = models.ConvModel2D3D(use_cache=self.use_cache,
-                                               history=self.prev_state_history, 
-                                               rotationally_randomize=True)       # this doesn't build and/or load the model yet
+        self.prev_state_history = config.prev_state_history # the number of previous states (including the current one) used as input to the model
+        
+        ModelType = models.__dict__[config.model_type] # get model class by name
+        self.checkpoint_model = ModelType(**config.model_kwargs) # this doesn't build and/or load the model yet
+        self.best_model = ModelType(**config.model_kwargs) # this doesn't build and/or load the model yet
+        
         if self.multithreaded:
             self.checkpoint_model.multithreaded = True
             self.best_model.multithreaded = True
-        self.learning_rate = .001
+        
+        # Model training parameters (fixed)
+        self.learning_rate = config.learning_rate
+        self.augment_training_data = config.augment_training_data
 
         # MCTS parameters (fixed)
-        self.max_depth = 900
-        self.max_steps = 1600
-        self.use_prebuilt_transposition_table = False
-        self.use_transposition_table = True if self.prev_state_history == 1 else False
-        self.decay = 0.95 # gamma
-        self.exploration = 1. #c_puct
+        self.max_depth = config.max_depth
+        self.max_steps = config.max_steps
+        self.use_prebuilt_transposition_table = config.use_prebuilt_transposition_table
+        self.use_transposition_table = config.use_transposition_table
+        self.decay = config.decay # gamma
+        self.exploration = config.exploration #c_puct
         self.prebuilt_transposition_table = None # built later
 
         # Validation flags
-        self.validate_training_data = True
+        self.validate_training_data = config.validate_training_data
 
         # Training parameters (fixed)
-        self.batch_size = 32
-        self.games_per_generation = 512
-        self.starting_distance = 1
-        self.min_distance = 1
-        self.win_rate_target = .9
-        self.min_game_length = max(2, self.prev_state_history)
-        self.max_game_length = 100
-        self.prev_generations_used_for_training = 8
-        self.training_sample_ratio = 1/self.prev_generations_used_for_training
-        self.games_per_evaluation = 128
+        self.batch_size = config.batch_size
+        self.games_per_generation = config.games_per_generation
+        self.starting_distance = config.starting_distance
+        self.min_distance = config.min_distance
+        self.win_rate_target = config.win_rate_target
+        self.min_game_length = config.min_game_length
+        self.max_game_length = config.max_game_length
+        self.prev_generations_used_for_training = config.prev_generations_used_for_training
+        self.training_sample_ratio = config.training_sample_ratio
+        self.games_per_evaluation = config.games_per_evaluation
 
         # Training parameters preserved between generations
         self.training_distance_level = float(self.starting_distance)
@@ -285,11 +300,11 @@ class TrainingAgent():
         glob_pattern = '{}_{}_gen*.h5'.format(filetype, version)
 
         # first check new saving scheme: ../results/<version>/filename
-        version_dir = RESULTS_DIR.joinpath(version)
+        version_dir = self.results_dir.joinpath(version)
 
         if not version_dir.exists():
             # try ../save/filename for backwards compatibility
-            version_dir = SAVE_DIR
+            version_dir = self.save_dir
 
         if not version_dir.exists():
             return [] # no files found
@@ -302,8 +317,8 @@ class TrainingAgent():
         return gen_paths
 
     def new_filepath(self, filetype):
-        file_name = "{}_{}_gen{:03}.h5".format(filetype, VERSIONS[0], self.generation)
-        return CURRENT_VERSION_DIR.joinpath(file_name)
+        file_name = "{}_{}_gen{:03}.h5".format(filetype, self.versions[0], self.generation)
+        return self.current_version_dir.joinpath(file_name)
 
     def load_transposition_table(self):
         #TODO: Add this.  For now, just use empty table.
@@ -324,7 +339,7 @@ class TrainingAgent():
 
         # load checkpoint model
         
-        for version in VERSIONS:
+        for version in self.versions:
             model_files = self.filepaths_by_generation('checkpoint_model', version)
 
             if model_files:
@@ -344,7 +359,7 @@ class TrainingAgent():
         print("generation set to", self.generation)
 
         # load best model
-        for version in VERSIONS:
+        for version in self.versions:
             model_files = self.filepaths_by_generation('model', version)
 
             if model_files:
@@ -397,7 +412,7 @@ class TrainingAgent():
         outputs_value_list = []
 
         counter = 0
-        for version in VERSIONS:
+        for version in self.versions:
             if counter > self.prev_generations_used_for_training:
                 break
 
@@ -429,7 +444,7 @@ class TrainingAgent():
 
         print("processing...")
         inputs_all, outputs_policy_all, outputs_value_all = \
-            self.checkpoint_model.process_training_data(inputs_all, outputs_policy_all, outputs_value_all, augment=True)
+            self.checkpoint_model.process_training_data(inputs_all, outputs_policy_all, outputs_value_all, augment=self.augment_training_data)
 
         n = len(inputs_all)
         sample_size = int((n * self.training_sample_ratio) // 32 + 1) * 32 # roughly self.training_sample_ratio % of samples
@@ -475,7 +490,7 @@ class TrainingAgent():
         self.generation_stats['best_model_generation'].append(self.best_generation)
         self.generation_stats['distance_level'].append(self.training_distance_level)
         self.generation_stats['memory_usage'].append(memory_used())
-        self.generation_stats['version_history'].append(",".join(VERSIONS))
+        self.generation_stats['version_history'].append(",".join(self.versions))
         self.generation_stats['self_play_start_datetime_utc'].append(str(self.self_play_start))
         self.generation_stats['self_play_end_datetime_utc'].append(str(self.self_play_end))
         self.generation_stats['self_play_time_sec'].append((self.self_play_end - self.self_play_start).total_seconds())
@@ -785,8 +800,8 @@ class TrainingAgent():
         else:
             print("\nCurrent best model is still the best.")
 
-def main():
-    agent = TrainingAgent()
+def main(config):
+    agent = TrainingAgent(config)
 
     print("Build models...")
     agent.build_models()
@@ -847,8 +862,10 @@ def main():
         #tr2.print_diff()
         
 if __name__ == '__main__':
+    import config  # configuration file containing frequently changed parameters
+
     try:
-        main()
+        main(config)
     except KeyboardInterrupt:
         print("\nExiting the program...\nGood bye!")
     finally:
