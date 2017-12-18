@@ -210,7 +210,8 @@ class TrainingAgent():
         self.current_version = get_current_version()
         self.versions = [self.current_version] + config.prev_versions
         
-        self.current_version_dir = pathlib.Path(config.results_dir).joinpath(self.current_version)
+        self.results_dir = pathlib.Path(config.results_dir)
+        self.current_version_dir = self.results_dir.joinpath(self.current_version)
         create_directory(self.current_version_dir) # create directory if it doesn't exist
         
         self.save_dir = pathlib.Path(config.save_dir) # for backwards compatibility
@@ -306,7 +307,7 @@ class TrainingAgent():
         glob_pattern = '{}_{}_gen*.h5'.format(filetype, version)
 
         # first check new saving scheme: ../results/<version>/filename
-        version_dir = self.current_version_dir
+        version_dir = self.results_dir.joinpath(version)
 
         if not version_dir.exists():
             # try ../save/filename for backwards compatibility
