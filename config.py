@@ -126,7 +126,7 @@ exploration = 1.0
 decay = 0.95
 
 # Dirichlet noise add to root node of MCTS to encourage exploration (default alpha is 1/12)
-dirichlet_const = .5  # alpha (set to None if not using Dirichlet noise)
+dirichlet_const = 1/12  # alpha (set to None if not using Dirichlet noise)
 
 # maximum depth to explore (usually never reached)
 max_depth = 900
