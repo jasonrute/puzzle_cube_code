@@ -254,6 +254,7 @@ class TrainingAgent():
         self.prev_generations_used_for_training = config.prev_generations_used_for_training
         self.training_sample_ratio = config.training_sample_ratio
         self.games_per_evaluation = config.games_per_evaluation
+        self.win_margin_to_become_best_model = config.win_margin_to_become_best_model
 
         # Training parameters preserved between generations
         self.training_distance_level = float(self.starting_distance)
@@ -793,7 +794,7 @@ class TrainingAgent():
         print("Best model      : {:2} / {:2} / {:2}".format(best_model_wins, checkpoint_model_wins, ties))
         print("Checkpoint model: {:2} / {:2} / {:2}".format(checkpoint_model_wins, best_model_wins, ties))
         
-        if checkpoint_model_wins - best_model_wins > 5:
+        if checkpoint_model_wins - best_model_wins >= self.win_margin_to_become_best_model:
             print("\nCheckpoint model is better.")
             print("\nSave and set as best model...")
             self.save_and_set_best_model()

@@ -89,7 +89,10 @@ max_game_length = 100
 # Evaluation parameters #
 #########################
 
+# Note: set both of these to 0 to skip the evaluation step
+
 games_per_evaluation = 128
+win_margin_to_become_best_model = 0#6
 
 
 ##################
