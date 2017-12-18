@@ -23,37 +23,6 @@ results_dir = '../results/'
 save_dir = '../save/'
 
 
-###################################
-# Self-Play (Training) parameters #
-###################################
-
-games_per_generation = 512
-batch_size = 32
-
-# training distance (how much to randomize the cube)
-starting_distance = 1
-min_distance = 1
-win_rate_target = .9
-
-# min/max number of games to play before stopping 
-min_game_length = max(2, prev_state_history)
-max_game_length = 100
-
-#########################
-# Evaluation parameters #
-#########################
-
-games_per_evaluation = 128
-
-##################
-# Multithreading #
-##################
-
-# This speeds up the training process by batching evaluations of the model (useful on CPU and GPU)
-# It also allows the cpu and gpu to work at the same time
-multithreaded = True
-
-
 ############################
 # Model (hyper-)parameters #
 ############################
@@ -81,6 +50,7 @@ model_kwargs = \
      "history": prev_state_history,
      "rotationally_randomize": rotationally_randomize}
 
+
 #####################################
 # Model Training (hyper-)parameters #
 #####################################
@@ -96,6 +66,40 @@ prev_generations_used_for_training = 8
 training_sample_ratio = 1/prev_generations_used_for_training
 
 learning_rate = .001
+
+
+###################################
+# Self-Play (Training) parameters #
+###################################
+
+games_per_generation = 512
+batch_size = 32
+
+# training distance (how much to randomize the cube)
+starting_distance = 1
+min_distance = 1
+win_rate_target = .9
+
+# min/max number of games to play before stopping 
+min_game_length = max(2, prev_state_history)
+max_game_length = 100
+
+
+#########################
+# Evaluation parameters #
+#########################
+
+games_per_evaluation = 128
+
+
+##################
+# Multithreading #
+##################
+
+# This speeds up the training process by batching evaluations of the model (useful on CPU and GPU)
+# It also allows the cpu and gpu to work at the same time
+multithreaded = True
+
 
 ###################
 # MCTS parameters #

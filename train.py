@@ -300,7 +300,7 @@ class TrainingAgent():
         glob_pattern = '{}_{}_gen*.h5'.format(filetype, version)
 
         # first check new saving scheme: ../results/<version>/filename
-        version_dir = self.results_dir.joinpath(version)
+        version_dir = self.current_version_dir
 
         if not version_dir.exists():
             # try ../save/filename for backwards compatibility
