@@ -37,7 +37,7 @@ prev_state_history = 1
 
 # Whether to randomly rotate the input before calculating the neural network
 # (There 48 color symmetries: 6 ways to rotate red face * 4 ways to rotate green face * 2 refections of yellow face = 48)
-rotationally_randomize = False
+rotationally_randomize = True
 
 # Whether to use a dictionary cache (with a max capacity) to speed up the neural network
 use_cache = True if prev_state_history == 1 else False
