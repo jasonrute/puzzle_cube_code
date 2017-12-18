@@ -73,7 +73,7 @@ learning_rate = .001
 ###################################
 
 games_per_generation = 512
-batch_size = 32
+batch_size = 1 #32
 
 # training distance (how much to randomize the cube)
 starting_distance = 1
