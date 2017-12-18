@@ -130,7 +130,10 @@ class MCTSNode():
             return max_depth_value
 
         # otherwise, find new action and follow path
-        action = np.argmax(self.mean_action_values + self.upper_confidence_bounds())
+        if self.total_visit_counts:
+            action = np.argmax(self.mean_action_values + self.upper_confidence_bounds())
+        else:
+            action = np.argmax(self.prior_probabilities) # use prior on first move since mean_action_values and upper_confidence_bounds are all zero
         
         # update visit counts before recursing in case we come across the same node again
         self.total_visit_counts += 1
@@ -211,6 +214,7 @@ class MCTSAgent():
         self.shortest_path = self.max_depth + 1
 
     def search(self, steps):
+        self.initial_node.is_leaf_node = False # so that at least exactly one move if steps = 1
         for s in range(steps):
             self.initial_node.select_leaf_and_update(self, self.max_depth) # explore new leaf node
             self.total_steps += 1
