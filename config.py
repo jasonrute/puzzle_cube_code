@@ -109,8 +109,8 @@ multithreaded = True
 ###################
 
 # Note: To use the model without MCTS, set
-# - max_steps == 1
-# - use_dirichet == False
+# - max_steps = 1
+# - use_dirichet = None
 
 # maximum exploration steps
 max_steps = 1600
@@ -124,6 +124,9 @@ exploration = 1.0
 # - likelyhood of success (0 or >0) 
 # - distance to the target (gamma ** distance)
 decay = 0.95
+
+# Dirichlet noise add to root node of MCTS to encourage exploration (default alpha is 1/12)
+dirichlet_const = .5  # alpha (set to None if not using Dirichlet noise)
 
 # maximum depth to explore (usually never reached)
 max_depth = 900

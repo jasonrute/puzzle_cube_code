@@ -62,7 +62,7 @@ class BatchGameAgent():
     """
     Handles the steps of the games, including batch games.
     """
-    def __init__(self, model, max_steps, max_depth, min_game_length, max_game_length, transposition_table, decay, exploration):
+    def __init__(self, model, max_steps, max_depth, min_game_length, max_game_length, transposition_table, decay, exploration, dirichlet_const):
         self.game_agents = deque()
         self.model = model
         self.max_depth = max_depth
@@ -72,6 +72,7 @@ class BatchGameAgent():
         self.transposition_table = transposition_table
         self.exploration = exploration
         self.decay = decay
+        self.dirichlet_const = dirichlet_const
 
     def is_empty(self):
         return not bool(self.game_agents)
@@ -83,7 +84,8 @@ class BatchGameAgent():
                              max_depth = self.max_depth, 
                              transposition_table = self.transposition_table.copy() if self.transposition_table is not None else None,
                              c_puct = self.exploration,
-                             gamma = self.decay)
+                             gamma = self.decay,
+                             dirichlet_const = self.dirichlet_const)
             
             game_agent = GameAgent(game_id)
             game_agent.mcts = mcts
@@ -237,8 +239,11 @@ class TrainingAgent():
         self.use_prebuilt_transposition_table = config.use_prebuilt_transposition_table
         self.use_transposition_table = config.use_transposition_table
         self.decay = config.decay # gamma
-        self.exploration = config.exploration #c_puct
+        self.exploration = config.exploration # c_puct
+        self.dirichlet_const = config.dirichlet_const # alpha (None if no Dirichlet noise)
+
         self.prebuilt_transposition_table = None # built later
+
 
         # Validation flags
         self.validate_training_data = config.validate_training_data
@@ -677,7 +682,8 @@ class TrainingAgent():
                                           max_game_length=self.max_game_length, 
                                           transposition_table=self.prebuilt_transposition_table,
                                           decay=self.decay, 
-                                          exploration=self.exploration) 
+                                          exploration=self.exploration,
+                                          dirichlet_const=self.dirichlet_const) 
 
         # scale batch size up to make for better beginning determination of distance level
         # use batch size of 1 for first 16 games

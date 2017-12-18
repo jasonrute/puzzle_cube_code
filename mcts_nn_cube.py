@@ -191,18 +191,22 @@ class MCTSNode():
 
 class MCTSAgent():
 
-    def __init__(self, model_policy_value, initial_state, max_depth, transposition_table={}, c_puct=1.0, gamma=.95):
+    def __init__(self, model_policy_value, initial_state, max_depth, transposition_table={}, c_puct=1.0, gamma=.95, use_dirichlet=True, dirichlet_const=1/12):
         self.model_policy_value = model_policy_value
         self.max_depth = max_depth
         self.total_steps = 0
         self.transposition_table = transposition_table
         self.c_puct = c_puct  # exploration constant
         self.gamma = gamma  # decay constant
+        self.dirichlet_const = dirichlet_const # alpha (None if no Dirichlet noise)
 
         self.initial_node = MCTSNode(self, initial_state)
-        self.initial_node.prior_probabilities = \
-            .75 * self.model_policy_value(self.initial_node.state.input_array())[0] +\
-            .25 * np.random.dirichlet([.5]*action_count, 1)[0]
+        if self.dirichlet_const is None:
+            self.initial_node.prior_probabilities = self.model_policy_value(self.initial_node.state.input_array())[0]
+        else:    
+            self.initial_node.prior_probabilities = \
+                .75 * self.model_policy_value(self.initial_node.state.input_array())[0] +\
+                .25 * np.random.dirichlet([self.dirichlet_const]*action_count, 1)[0]
 
         self.shortest_path = self.max_depth + 1
 
@@ -236,9 +240,12 @@ class MCTSAgent():
         # including from the tranposition table
         
         self.initial_node = self.initial_node.child(self, action) 
-        self.initial_node.prior_probabilities = \
-            .75 * self.model_policy_value(self.initial_node.state.input_array())[0] +\
-            .25 * np.random.dirichlet([.5]*action_count, 1)[0]
+        if self.dirichlet_const is None:
+            self.initial_node.prior_probabilities = self.model_policy_value(self.initial_node.state.input_array())[0]
+        else:    
+            self.initial_node.prior_probabilities = \
+                .75 * self.model_policy_value(self.initial_node.state.input_array())[0] +\
+                .25 * np.random.dirichlet([self.dirichlet_const]*action_count, 1)[0]
         
         self.shortest_path = self.max_depth + 1
 
