@@ -81,7 +81,7 @@ min_distance = 1
 win_rate_target = .5
 
 # min/max number of games to play before stopping 
-min_game_length = 50#max(2, prev_state_history)
+min_game_length = max(2, prev_state_history)
 max_game_length = 100
 
 
