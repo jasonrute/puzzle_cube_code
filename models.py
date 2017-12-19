@@ -206,7 +206,7 @@ class BaseModel():
         """ 
         if self.rotationally_randomize:
             rotation_id = np.random.choice(48)
-            randomize_input(input_array, rotation_id)
+            input_array = randomize_input(input_array, rotation_id)
 
         if self.use_cache:
             key = input_array.tobytes()
