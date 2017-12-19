@@ -37,7 +37,7 @@ prev_state_history = 1
 
 # Whether to randomly rotate the input before calculating the neural network
 # (There 48 color symmetries: 6 ways to rotate red face * 4 ways to rotate green face * 2 refections of yellow face = 48)
-rotationally_randomize = True
+rotationally_randomize = False
 
 # Whether to use a dictionary cache (with a max capacity) to speed up the neural network
 use_cache = True if prev_state_history == 1 else False
@@ -81,7 +81,7 @@ min_distance = 1
 win_rate_target = .5
 
 # min/max number of games to play before stopping 
-min_game_length = max(2, prev_state_history)
+min_game_length = 50#max(2, prev_state_history)
 max_game_length = 100
 
 
@@ -113,7 +113,7 @@ multithreaded = True
 # - use_dirichet = None
 
 # maximum exploration steps
-max_steps = 1600
+max_steps = 1 #1600
 
 # exploration constant (c_puct)
 # note: this is currently scaled by the value of the node because of the decay
