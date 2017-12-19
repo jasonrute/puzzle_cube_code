@@ -199,15 +199,11 @@ class BaseModel():
             task.lock.wait() # wait until task is processed
             return task.output # return output
 
-    def function(self, input_array):
+    def _inner_function(self, input_array):
         """
         The function which computes the output to the array.
         Assume input_array has shape (-1, 56, 4) where -1 represents the history.
         """ 
-        if self.rotationally_randomize:
-            rotation_id = np.random.choice(48)
-            input_array = randomize_input(input_array, rotation_id)
-
         if self.use_cache:
             key = input_array.tobytes()
             if key in self._cache:
@@ -227,7 +223,22 @@ class BaseModel():
             self._cache[key] = (policy, value)
             if len(self._cache) > self.max_cache_size:
                 self._cache.popitem(last=False)
-        
+
+        return policy, value
+
+    def function(self, input_array):
+        """
+        The function which computes the output to the array.
+        If self.rotationally_randomize is true, will first randomly rotate input
+        and (un-)rotate corresponding policy output.
+        Assume input_array has shape (-1, 56, 4) where -1 represents the history.
+        """ 
+        if self.rotationally_randomize:
+            rotation_id = np.random.choice(48)
+            input_array = randomize_input(input_array, rotation_id)
+
+        policy, value = self._inner_function(input_array)
+
         if self.rotationally_randomize:
             policy = derandomize_policy(policy, rotation_id)
 
