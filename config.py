@@ -113,7 +113,7 @@ multithreaded = True
 # - use_dirichet = None
 
 # maximum exploration steps
-max_steps = 1 #1600
+max_steps = 1600
 
 # exploration constant (c_puct)
 # note: this is currently scaled by the value of the node because of the decay
