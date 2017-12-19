@@ -33,7 +33,7 @@ model_type = "ConvModel2D3D"
 # How much history to use in the model.
 # - If 1, then the model will only use the current state.
 # - If 8, then the model will use the current state and the previous 7 states (if available)
-prev_state_history = 1
+prev_state_history = 8
 
 # Whether to randomly rotate the input before calculating the neural network
 # (There 48 color symmetries: 6 ways to rotate red face * 4 ways to rotate green face * 2 refections of yellow face = 48)
