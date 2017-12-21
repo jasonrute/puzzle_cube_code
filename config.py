@@ -65,7 +65,7 @@ augment_training_data = True
 prev_generations_used_for_training = 8
 training_sample_ratio = 1/prev_generations_used_for_training
 
-learning_rate = .001
+learning_rate = .0001
 
 
 ###################################
@@ -113,7 +113,7 @@ multithreaded = True
 # - use_dirichet = None
 
 # maximum exploration steps
-max_steps = 1600  # (1 is no MCTS) (AlphGo uses 1600, AlphaZero uses 800)
+max_steps = 800  # (1 is no MCTS) (AlphGo uses 1600, AlphaZero uses 800)
 
 # exploration constant (c_puct)
 # note: this is currently scaled by the value of the node because of the decay
