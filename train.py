@@ -660,7 +660,8 @@ class TrainingAgent():
                 distance_level = max(self.training_distance_level, self.checkpoint_training_distance_level)
             else:
                 distance_level = self.training_distance_level 
-            distance = self.random_distance(distance_level)
+            distance = 20 - self.game_number // 100 # decrease distance every 100 games
+            #distance = self.random_distance(distance_level)
             state = self.random_state(distance, self.prev_state_history)
 
             print("(DB)", "starting game", self.game_number, "...")
