@@ -65,7 +65,7 @@ augment_training_data = True
 prev_generations_used_for_training = 8
 training_sample_ratio = 1/prev_generations_used_for_training
 
-learning_rate = .0001
+learning_rate = .001
 
 
 ###################################
