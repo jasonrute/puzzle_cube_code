@@ -37,7 +37,7 @@ prev_state_history = 8
 
 # Whether to randomly rotate the input before calculating the neural network
 # (There 48 color symmetries: 6 ways to rotate red face * 4 ways to rotate green face * 2 refections of yellow face = 48)
-rotationally_randomize = True
+rotationally_randomize = False
 
 # Whether to use a dictionary cache (with a max capacity) to speed up the neural network
 use_cache = True if prev_state_history == 1 else False
@@ -81,7 +81,7 @@ min_distance = 1
 win_rate_target = .5
 
 # min/max number of games to play before stopping 
-min_game_length = max(2, prev_state_history)
+min_game_length = 50
 max_game_length = 100
 
 
@@ -113,7 +113,7 @@ multithreaded = True
 # - use_dirichet = None
 
 # maximum exploration steps
-max_steps = 800  # (1 is no MCTS) (AlphGo uses 1600, AlphaZero uses 800)
+max_steps = 1  # (1 is no MCTS) (AlphGo uses 1600, AlphaZero uses 800)
 
 # exploration constant (c_puct)
 # note: this is currently scaled by the value of the node because of the decay
@@ -126,7 +126,7 @@ exploration = 1.0
 decay = 0.95
 
 # Dirichlet noise add to root node of MCTS to encourage exploration (default alpha is 1/12)
-dirichlet_const = 1/12  # alpha (set to None if not using Dirichlet noise)
+dirichlet_const = None  # alpha (set to None if not using Dirichlet noise)
 
 # maximum depth to explore (usually never reached)
 max_depth = 900
