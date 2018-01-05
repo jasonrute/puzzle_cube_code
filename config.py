@@ -72,7 +72,7 @@ learning_rate = .001
 # Self-Play (Training) parameters #
 ###################################
 
-games_per_generation = 20 * 100 #512
+games_per_generation = 20 * 1000 #512
 batch_size = 32
 
 # training distance (how much to randomize the cube)
