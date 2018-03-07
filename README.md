@@ -1,1 +1,1 @@
-This project is a submodule for [https://github.com/jasonrute/puzzle_cube].  Go there for more information.
+This project is a submodule for [github.com/jasonrute/puzzle_cube](https://github.com/jasonrute/puzzle_cube).  Go there for more information.
