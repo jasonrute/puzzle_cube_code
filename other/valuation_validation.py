@@ -58,7 +58,7 @@ if __name__ == '__main__':
     from collections import Counter
 
     cnts = Counter()
-    model_file_path = "/Users/jasonrute/Data/cube_best_model/checkpoint_model_v1.0.5-r_gen034.h5"
+    model_file_path = "../example/checkpoint_model_v1.0.5-r_gen034.h5"
     for d in range(1, 30):
         cnt_solved = 0
         for _ in range(100):
