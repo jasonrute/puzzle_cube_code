@@ -79,6 +79,7 @@ class MCTSNode():
             self.visit_counts = np.zeros(action_count, dtype=int)
             self.total_action_values = np.zeros(action_count)
             self.mean_action_values = np.zeros(action_count)
+            self.connected_to_terminal = np.zeros(action_count, dtype=bool)
             self.children = [None] * action_count
 
     def upper_confidence_bounds(self):
@@ -115,19 +116,19 @@ class MCTSNode():
             if depth < mcts_agent.shortest_path:
                 mcts_agent.shortest_path = depth
 
-            return 1.
+            return 1., True
 
         # we stop at leaf nodes
         if self.is_leaf_node:
             self.is_leaf_node = False
             #print("... leaf node, returning ", self.node_value)
-            return self.node_value
+            return self.node_value, False
 
         # reaching max depth is bad
         # (this should punish loops as well)
         if not max_depth:
             #print("... max_depth == 0, returning -1")
-            return max_depth_value
+            return max_depth_value, False
 
         # otherwise, find new action and follow path
         if self.total_visit_counts:
@@ -140,11 +141,16 @@ class MCTSNode():
         self.visit_counts[action] += 1
 
         #print("Performing Action:", action)
-        action_value = mcts_agent.gamma * \
-                       self.child(mcts_agent, action) \
-                           .select_leaf_and_update(mcts_agent, max_depth - 1)
+        child_action_value, reached_terminal = \
+            self.child(mcts_agent, action).select_leaf_and_update(mcts_agent, max_depth - 1)
+        action_value = mcts_agent.gamma * child_action_value
+
         #print("Returning back to:", max_depth)
-        
+
+        # record if reached_terminal
+        if reached_terminal:
+            self.connected_to_terminal[action] = True
+
         # recursively update edge values
         self.total_action_values[action] += action_value
         self.mean_action_values[action] = self.total_action_values[action] / self.visit_counts[action]
@@ -153,7 +159,7 @@ class MCTSNode():
         #print("DB: update node", "action:", action, "action value:", action_value)
         #print(self.status() + "\n")
 
-        return action_value
+        return action_value, reached_terminal
 
     def action_visit_counts(self):
         """ Returns action visit counts. """
@@ -194,7 +200,7 @@ class MCTSNode():
 
 class MCTSAgent():
 
-    def __init__(self, model_policy_value, initial_state, max_depth, transposition_table={}, c_puct=1.0, gamma=.95, use_dirichlet=True, dirichlet_const=1/12):
+    def __init__(self, model_policy_value, initial_state, max_depth, transposition_table={}, c_puct=1.0, gamma=.95, dirichlet_const=1/12):
         self.model_policy_value = model_policy_value
         self.max_depth = max_depth
         self.total_steps = 0
@@ -213,9 +219,11 @@ class MCTSAgent():
 
         self.shortest_path = self.max_depth + 1
 
-    def search(self, steps):
+    def search(self, steps: int, stop_early: bool = False):
         self.initial_node.is_leaf_node = False # so that at least exactly one move if steps = 1
         for s in range(steps):
+            if stop_early and self.shortest_path < self.max_depth + 1:
+                break
             self.initial_node.select_leaf_and_update(self, self.max_depth) # explore new leaf node
             self.total_steps += 1
 
